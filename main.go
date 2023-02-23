@@ -1,7 +1,7 @@
 package main
 
 import (
-  "github.com/dfairburn/tp/cmd"
+	"github.com/dfairburn/tp/cmd"
 )
 
 func main() {

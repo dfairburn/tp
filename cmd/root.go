@@ -1,29 +1,47 @@
 package cmd
 
 import (
-  "errors"
+	"errors"
+	"fmt"
+  "log"
 
 	"github.com/spf13/cobra"
+
+	"github.com/dfairburn/tp/config"
 )
 
 var (
-  // global flags
-  rootCmd = &cobra.Command{
-    Use:   "tp",
-    Short: "tp is a configurable api client",
-    Long:  `some text about tp`,
-    RunE: func(cmd *cobra.Command, args []string) error {
-      return errors.New("No subcommand given")
-    },
-  }
+	// global flags
+	c       config.Config
+	cfgFile string
+	rootCmd = &cobra.Command{
+		Use:   "tp",
+		Short: "tp is a configurable api client",
+		Long:  `some text about tp`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return errors.New("No subcommand given")
+		},
+	}
 )
 
 func Execute() error {
-  return rootCmd.Execute()
+	return rootCmd.Execute()
 }
 
 func init() {
-  handleFlags()
+	cobra.OnInitialize(initConfig)
+
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/tp/config.yaml)")
 }
 
-func handleFlags() {}
+func initConfig() {
+	fmt.Println("hi mom")
+	if cfgFile != "" {
+		cfg, err := config.LoadConfig(cfgFile)
+		if err != nil {
+			log.Fatalf("could not load given config: %v\n", err)
+		}
+
+		c = cfg
+	}
+}

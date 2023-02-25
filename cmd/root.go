@@ -2,8 +2,7 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
-  "log"
+	"log"
 
 	"github.com/spf13/cobra"
 
@@ -35,7 +34,6 @@ func init() {
 }
 
 func initConfig() {
-	fmt.Println("hi mom")
 	if cfgFile != "" {
 		cfg, err := config.LoadConfig(cfgFile)
 		if err != nil {

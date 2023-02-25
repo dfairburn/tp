@@ -1,10 +1,9 @@
 package config
 
 import (
-	"fmt"
-  "os"
+	"os"
 
-  "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -32,9 +31,8 @@ func LoadOrNewConfig(path *string) {
 	if path == nil {
 		// look for config in default place
 		//f, err := os.Open("/tmp/dat")
-		for _, path := range PathsToCheck {
-			fmt.Println(path)
-		}
+		//for _, _ := range PathsToCheck {
+		//}
 	}
 }
 
@@ -43,8 +41,6 @@ func LoadConfig(path string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-
-	defer f.Close()
 
 	var cfg Config
 	decoder := yaml.NewDecoder(f)

@@ -13,11 +13,6 @@ import (
 	"github.com/dfairburn/tp/vars"
 )
 
-type Req struct {
-	Token *string
-	Name  string
-}
-
 const (
 	urlKey     = "===Url"
 	url        = "url"

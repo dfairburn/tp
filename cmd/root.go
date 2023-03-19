@@ -36,8 +36,6 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/tp/config.yaml)")
 	rootCmd.PersistentFlags().StringVar(&logFile, "log", ".tp.log", "config file (default is $HOME/tp/config.yaml)")
-
-	//cobra.OnInitialize(initLogger, initConfig)
 }
 
 func initConfig() {

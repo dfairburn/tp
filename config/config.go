@@ -1,9 +1,9 @@
 package config
 
 import (
-	"os"
-
+	"errors"
 	"gopkg.in/yaml.v3"
+	"os"
 )
 
 const (
@@ -27,16 +27,32 @@ var (
 	}
 )
 
-func LoadOrNewConfig(path *string) {
-	if path == nil {
-		// look for config in default place
-		//f, err := os.Open("/tmp/dat")
-		//for _, _ := range PathsToCheck {
-		//}
+func LoadOrDefaultConfig(path string) (Config, error) {
+	var errs []error
+	// Check path given via cli flag
+	if path != "" {
+		config, err := loadConfig(path)
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			return config, nil
+		}
 	}
+
+	// Check default paths
+	for _, p := range PathsToCheck {
+		config, err := loadConfig(p)
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			return config, nil
+		}
+	}
+
+	return Config{}, errors.Join(errs...)
 }
 
-func LoadConfig(path string) (Config, error) {
+func loadConfig(path string) (Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return Config{}, err

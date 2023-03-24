@@ -13,6 +13,8 @@ const (
 	ConfigDir      = "config/"
 	ConfigFilename = "config.yml"
 
+	LogFilename = "tp.log"
+
 	VarDir      = "vars/"
 	VarFilename = "vars.yml"
 
@@ -23,6 +25,8 @@ const (
 	ConfigHomeLocFile      = HomeLoc + ConfigFilename
 	ConfigRelLocInDirFile  = RelLoc + ConfigDir + ConfigFilename
 	ConfigRelLocFile       = RelLoc + ConfigFilename
+
+	DefaultLogFile = HomeLoc + LogFilename
 )
 
 var (
@@ -35,11 +39,11 @@ var (
 )
 
 func LoadOrDefaultConfig(logger *logging.Logger, paths ...string) (Config, error) {
-	// Check path given via cli flag
-	configPathsToCheck = append(configPathsToCheck, paths...)
-	f, err := tryFiles(logger, varPathsToCheck...)
+	// this gives precedent to paths passed in via config and flags, then processes the default file paths
+	paths = append(paths, configPathsToCheck...)
+	f, err := tryFiles(logger, paths...)
 	if err != nil {
-		logger.Errorf("error: %v", err)
+		logger.Error(err)
 	}
 
 	return loadConfig(f)
@@ -65,7 +69,7 @@ func tryFiles(logger *logging.Logger, paths ...string) (*os.File, error) {
 	for _, p := range paths {
 		f, err := os.Open(p)
 		if err != nil {
-			logger.Warn("error: %v", err)
+			logger.Warnf("error: %v", err)
 			continue
 		}
 		return f, nil

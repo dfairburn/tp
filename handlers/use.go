@@ -10,7 +10,7 @@ import (
 	"text/template"
 
 	"github.com/dfairburn/tp/config"
-	"github.com/dfairburn/tp/vars"
+	logging "github.com/sirupsen/logrus"
 )
 
 const (
@@ -29,11 +29,10 @@ var (
 )
 
 // Use gets a filepath and "uses" that template
-func Use(path string, config config.Config) error {
-	fmt.Println(config.VariableDefinitionFile)
-	v := vars.LoadVars(config.VariableDefinitionFile)
+func Use(logger *logging.Logger, cfg config.Config, varsFile, templateFile string) error {
+	v := config.LoadVars(logger, varsFile, cfg.VariableDefinitionFile)
 
-	tp := template.Must(template.ParseFiles(path))
+	tp := template.Must(template.ParseFiles(templateFile))
 
 	var buf bytes.Buffer
 	err := tp.Execute(&buf, v)

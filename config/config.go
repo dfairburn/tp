@@ -1,66 +1,54 @@
 package config
 
 import (
-	"errors"
+	"fmt"
 	"gopkg.in/yaml.v3"
 	"os"
+	"strings"
+
+	logging "github.com/sirupsen/logrus"
 )
 
 const (
-	InDir    = "config/"
-	HomeLoc  = "~/.tp/"
-	RelLoc   = "./tp/"
-	Filename = "config.yml"
+	ConfigDir      = "config/"
+	ConfigFilename = "config.yml"
 
-	HomeLocInDirFile = HomeLoc + InDir + Filename
-	HomeLocFile      = HomeLoc + Filename
-	RelLocInDirFile  = RelLoc + InDir + Filename
-	RelLocFile       = RelLoc + Filename
+	VarDir      = "vars/"
+	VarFilename = "vars.yml"
+
+	HomeLoc = "~/.tp/"
+	RelLoc  = "./tp/"
+
+	ConfigHomeLocInDirFile = HomeLoc + ConfigDir + ConfigFilename
+	ConfigHomeLocFile      = HomeLoc + ConfigFilename
+	ConfigRelLocInDirFile  = RelLoc + ConfigDir + ConfigFilename
+	ConfigRelLocFile       = RelLoc + ConfigFilename
 )
 
 var (
-	PathsToCheck = []string{
-		HomeLocInDirFile,
-		HomeLocFile,
-		RelLocInDirFile,
-		RelLocFile,
+	configPathsToCheck = []string{
+		ConfigHomeLocInDirFile,
+		ConfigHomeLocFile,
+		ConfigRelLocInDirFile,
+		ConfigRelLocFile,
 	}
 )
 
-func LoadOrDefaultConfig(path string) (Config, error) {
-	var errs []error
+func LoadOrDefaultConfig(logger *logging.Logger, paths ...string) (Config, error) {
 	// Check path given via cli flag
-	if path != "" {
-		config, err := loadConfig(path)
-		if err != nil {
-			errs = append(errs, err)
-		} else {
-			return config, nil
-		}
+	configPathsToCheck = append(configPathsToCheck, paths...)
+	f, err := tryFiles(logger, varPathsToCheck...)
+	if err != nil {
+		logger.Errorf("error: %v", err)
 	}
 
-	// Check default paths
-	for _, p := range PathsToCheck {
-		config, err := loadConfig(p)
-		if err != nil {
-			errs = append(errs, err)
-		} else {
-			return config, nil
-		}
-	}
-
-	return Config{}, errors.Join(errs...)
+	return loadConfig(f)
 }
 
-func loadConfig(path string) (Config, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return Config{}, err
-	}
-
+func loadConfig(f *os.File) (Config, error) {
 	var cfg Config
 	decoder := yaml.NewDecoder(f)
-	err = decoder.Decode(&cfg)
+	err := decoder.Decode(&cfg)
 	if err != nil {
 		return Config{}, err
 	}
@@ -71,4 +59,17 @@ func loadConfig(path string) (Config, error) {
 type Config struct {
 	// File defining defaults for variables
 	VariableDefinitionFile string `yaml:"variableDefinitionFile"`
+}
+
+func tryFiles(logger *logging.Logger, paths ...string) (*os.File, error) {
+	for _, p := range paths {
+		f, err := os.Open(p)
+		if err != nil {
+			logger.Warn("error: %v", err)
+			continue
+		}
+		return f, nil
+	}
+
+	return nil, fmt.Errorf("no files existed: %s\n", strings.Join(paths, ","))
 }

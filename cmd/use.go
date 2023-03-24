@@ -19,7 +19,7 @@ var (
 				return errors.New("no path provided")
 			}
 
-			return handlers.Use(args[0], c)
+			return handlers.Use(logger, c, varsFile, args[0])
 		},
 	}
 )

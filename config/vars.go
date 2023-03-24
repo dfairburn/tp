@@ -26,8 +26,10 @@ var (
 func LoadVars(logger *logging.Logger, paths ...string) map[interface{}]interface{} {
 	y := make(map[interface{}]interface{})
 
-	varPathsToCheck = append(varPathsToCheck, paths...)
-	f, err := tryFiles(logger, varPathsToCheck...)
+	// this gives precedent to paths passed in via config and flags, then processes the default file paths
+	paths = append(paths, varPathsToCheck...)
+
+	f, err := tryFiles(logger, paths...)
 	if err != nil {
 		logger.Fatalf("error: %v", err)
 	}

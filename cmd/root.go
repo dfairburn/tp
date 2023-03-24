@@ -42,7 +42,7 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", config.ConfigHomeLocFile, "yaml file containing config")
 	rootCmd.PersistentFlags().StringVar(&varsFile, "vars", config.VarHomeLocFile, "yaml file containing variable definitions")
-	rootCmd.PersistentFlags().StringVar(&logFile, "log", "~/.tp/tp.log", "destination of log file")
+	rootCmd.PersistentFlags().StringVar(&logFile, "log", config.DefaultLogFile, "destination of log file")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "whether to print debug to stdout")
 }
 

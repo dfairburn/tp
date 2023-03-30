@@ -1,3 +1,4 @@
 Token: "this is the token"
 Name: "this is the name"
 Endpoint: "https://github.com/"
+Method: "GET"

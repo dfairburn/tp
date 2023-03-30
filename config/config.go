@@ -2,45 +2,19 @@ package config
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"os"
 	"strings"
+
+	"gopkg.in/yaml.v3"
+
+	tppaths "github.com/dfairburn/tp/paths"
 
 	logging "github.com/sirupsen/logrus"
 )
 
-const (
-	ConfigDir      = "config/"
-	ConfigFilename = "config.yml"
-
-	LogFilename = "tp.log"
-
-	VarDir      = "vars/"
-	VarFilename = "vars.yml"
-
-	HomeLoc = "~/.tp/"
-	RelLoc  = "./tp/"
-
-	ConfigHomeLocInDirFile = HomeLoc + ConfigDir + ConfigFilename
-	ConfigHomeLocFile      = HomeLoc + ConfigFilename
-	ConfigRelLocInDirFile  = RelLoc + ConfigDir + ConfigFilename
-	ConfigRelLocFile       = RelLoc + ConfigFilename
-
-	DefaultLogFile = HomeLoc + LogFilename
-)
-
-var (
-	configPathsToCheck = []string{
-		ConfigHomeLocInDirFile,
-		ConfigHomeLocFile,
-		ConfigRelLocInDirFile,
-		ConfigRelLocFile,
-	}
-)
-
 func LoadOrDefaultConfig(logger *logging.Logger, paths ...string) (Config, error) {
 	// this gives precedent to paths passed in via config and flags, then processes the default file paths
-	paths = append(paths, configPathsToCheck...)
+	paths = append(paths, buildConfigPaths().paths...)
 	f, err := tryFiles(logger, paths...)
 	if err != nil {
 		logger.Error(err)
@@ -66,14 +40,19 @@ type Config struct {
 }
 
 func tryFiles(logger *logging.Logger, paths ...string) (*os.File, error) {
+	var expandedPaths []string
 	for _, p := range paths {
-		f, err := os.Open(p)
+		expanded := tppaths.Expand(p)
+		expandedPaths = append(expandedPaths, expanded)
+
+		f, err := os.Open(expanded)
 		if err != nil {
 			logger.Warnf("error: %v", err)
 			continue
 		}
-		return f, nil
+
+		return f, err
 	}
 
-	return nil, fmt.Errorf("no files existed: %s\n", strings.Join(paths, ","))
+	return nil, fmt.Errorf("no files existed: %s\n", strings.Join(expandedPaths, ", "))
 }

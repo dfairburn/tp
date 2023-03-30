@@ -2,15 +2,13 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
-	"path"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/dfairburn/tp/config"
+	"github.com/dfairburn/tp/paths"
+
 	logging "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -40,8 +38,8 @@ func Execute() error {
 func init() {
 	cobra.OnInitialize(initLogger, initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", config.ConfigHomeLocFile, "yaml file containing config")
-	rootCmd.PersistentFlags().StringVar(&varsFile, "vars", config.VarHomeLocFile, "yaml file containing variable definitions")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", config.DefaultConfigFile, "yaml file containing config")
+	rootCmd.PersistentFlags().StringVar(&varsFile, "vars", config.DefaultVarFile, "yaml file containing variable definitions")
 	rootCmd.PersistentFlags().StringVar(&logFile, "log", config.DefaultLogFile, "destination of log file")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "whether to print debug to stdout")
 }
@@ -56,7 +54,7 @@ func initConfig() {
 }
 
 func initLogger() {
-	lf := openOrCreateFile(logFile)
+	lf := paths.OpenOrCreateFile(logFile)
 	var w io.Writer = lf
 	if debug {
 		w = io.MultiWriter(os.Stdout, lf)
@@ -67,35 +65,4 @@ func initLogger() {
 		TimestampFormat: time.RFC3339,
 	}
 	logger.Formatter = &formatter
-}
-
-func openOrCreateFile(p string) *os.File {
-	// check if we can open the file for writing straight away
-	expandedPath := expandTilde(p)
-	lf, err := os.Create(expandedPath)
-	if err != nil {
-		// create dir so we can open the file for writing
-		dir := path.Dir(p)
-		expandedDir := expandTilde(dir)
-
-		err := os.Mkdir(expandedDir, 0750)
-		if err != nil {
-			panic(fmt.Errorf("could not create log file path: %v", err))
-		}
-
-		lf, err = os.Create(expandedPath)
-		if err != nil {
-			panic(fmt.Errorf("could not open log file path: %v", err))
-		}
-	}
-
-	return lf
-}
-
-func expandTilde(p string) string {
-	if strings.HasPrefix(p, "~/") {
-		replaced := filepath.Join("$HOME", p[2:])
-		return os.ExpandEnv(replaced)
-	}
-	return p
 }

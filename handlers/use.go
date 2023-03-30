@@ -9,7 +9,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/dfairburn/tp/config"
 	logging "github.com/sirupsen/logrus"
 )
 
@@ -29,13 +28,11 @@ var (
 )
 
 // Use gets a filepath and "uses" that template
-func Use(logger *logging.Logger, cfg config.Config, varsFile, templateFile string) error {
-	v := config.LoadVars(logger, varsFile, cfg.VariableDefinitionFile)
-
+func Use(logger *logging.Logger, templateFile string, vars any) error {
 	tp := template.Must(template.ParseFiles(templateFile))
 
 	var buf bytes.Buffer
-	err := tp.Execute(&buf, v)
+	err := tp.Execute(&buf, vars)
 
 	req := NewRequest(buf)
 	r, err := req.toHttp()
@@ -44,6 +41,7 @@ func Use(logger *logging.Logger, cfg config.Config, varsFile, templateFile strin
 	}
 
 	cli := http.Client{}
+
 	resp, err := cli.Do(r)
 	if err != nil {
 		return err

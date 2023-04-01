@@ -5,10 +5,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	httpurl "net/url"
 	"regexp"
 	"strings"
 	"text/template"
 
+	"github.com/dfairburn/tp/config"
 	logging "github.com/sirupsen/logrus"
 )
 
@@ -28,11 +30,12 @@ var (
 )
 
 // Use gets a filepath and "uses" that template
-func Use(logger *logging.Logger, templateFile string, vars any) error {
+func Use(logger *logging.Logger, templateFile string, vars map[interface{}]interface{}, overrides []config.Override) error {
 	tp := template.Must(template.ParseFiles(templateFile))
+	overridden := Override(vars, overrides)
 
 	var buf bytes.Buffer
-	err := tp.Execute(&buf, vars)
+	err := tp.Execute(&buf, overridden)
 
 	req := NewRequest(buf)
 	r, err := req.toHttp()
@@ -55,7 +58,7 @@ type Request struct {
 	Method  string
 	Headers map[string]string
 	Body    string
-	Url     string
+	Url     *httpurl.URL
 }
 
 func NewRequest(b bytes.Buffer) Request {
@@ -70,7 +73,11 @@ func NewRequest(b bytes.Buffer) Request {
 		k := toKey(key)
 		v := findNextSection(sub[1])[0]
 
-		buildRequest(&r, k, v)
+		rb, err := buildRequest(&r, k, v)
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println(rb)
 	}
 
 	return r
@@ -78,14 +85,18 @@ func NewRequest(b bytes.Buffer) Request {
 
 func (r Request) toHttp() (*http.Request, error) {
 	reqBody := bytes.NewBufferString(r.Body)
-	return http.NewRequestWithContext(context.Background(), r.Method, r.Url, reqBody)
+	return http.NewRequestWithContext(context.Background(), r.Method, r.Url.String(), reqBody)
 }
 
-func buildRequest(r *Request, k string, v string) *Request {
+func buildRequest(r *Request, k string, v string) (*Request, error) {
 	switch k {
 	case url:
 		trim(&v)
-		r.Url = v
+		parsed, err := httpurl.Parse(v)
+		if err != nil {
+			return nil, fmt.Errorf("cannot parse %s as a url: %w", v, err)
+		}
+		r.Url = parsed
 	case method:
 		trim(&v)
 		r.Method = v
@@ -109,7 +120,7 @@ func buildRequest(r *Request, k string, v string) *Request {
 		r.Body = v
 	}
 
-	return r
+	return r, nil
 }
 
 func trim(s ...*string) {
@@ -126,4 +137,29 @@ func findNextSection(s string) []string {
 func toKey(s string) string {
 	nonAlphaRegex := regexp.MustCompile(`[^a-zA-Z]+`)
 	return strings.ToLower(nonAlphaRegex.ReplaceAllString(s, ""))
+}
+
+func Override(vars map[interface{}]interface{}, overrides []config.Override) any {
+	matchMap := lowerCaseMap(vars)
+
+	for _, override := range overrides {
+		// lower-case key to match with lower-cased var map
+		lowerKey := strings.ToLower(override.Key)
+		if key, ok := matchMap[lowerKey]; ok {
+			vars[key] = override.Value
+		}
+	}
+
+	return vars
+}
+
+func lowerCaseMap(y map[interface{}]interface{}) map[string]string {
+	keyToLowercaseMappings := make(map[string]string)
+	for k, _ := range y {
+		if key, ok := k.(string); ok {
+			keyToLowercaseMappings[strings.ToLower(key)] = key
+		}
+	}
+
+	return keyToLowercaseMappings
 }

@@ -14,9 +14,12 @@ var (
 	overrides     []string
 	overrideUsage = "A comma separated list of variable overrides.\n" +
 		"A variable override is a list of strings in the following format:\n" +
-		"The of the name of the variable, followed by a semicolon, followed by the override value, " +
+		"The of the name of the variable, followed by a double-pipe, followed by the override value, " +
 		"e.g:\n" +
-		"--overrides=variableName1:overriddenValue1,variableName2:overriddenValue2"
+		"--overrides=variableName1||overriddenValue1,variableName2||overriddenValue2" +
+		"or you can repeatedly use the flag like so:\n" +
+		"-o=override1||value1 -o=override2||override2"
+
 	useCmd = &cobra.Command{
 		Use:   "use",
 		Short: "Uses a given template to send a curl request",
@@ -28,26 +31,19 @@ var (
 			}
 			var vars map[interface{}]interface{}
 
-			if c.VariableDefinitionFile == "" {
-				// if variableDefinitionFile isn't set in config, don't add it to paths to be checked
-				vars = config.LoadVars(logger, varsFile)
-			} else {
-				vars = config.LoadVars(logger, varsFile, c.VariableDefinitionFile)
+			vars = config.LoadVars(logger, varsFile, c.VariableDefinitionFile)
+			overrides, err := config.ValidateOverrides(overrides, logger)
+			if err != nil {
+				logger.Fatalf("cannot use overrides due to errors: %v", err)
 			}
-			overrides := validateOverrides(overrides)
-			logger.Info("overrides: ", overrides)
 
-			return handlers.Use(logger, args[0], vars)
+			return handlers.Use(logger, args[0], vars, overrides)
 		},
 	}
 )
 
 func init() {
-	useCmd.Flags().StringArrayP("overrides", "o", overrides, overrideUsage)
+	useCmd.Flags().StringSliceVarP(&overrides, "overrides", "o", []string{}, overrideUsage)
 
 	rootCmd.AddCommand(useCmd)
-}
-
-func validateOverrides(o []string) []string {
-	return o
 }

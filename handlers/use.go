@@ -43,6 +43,11 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 		return err
 	}
 
+	fmt.Println("method:", r.Method)
+	fmt.Println("url:", r.URL)
+	fmt.Println("body:", r.Body)
+	fmt.Println("headers:", r.Header)
+
 	cli := http.Client{}
 
 	resp, err := cli.Do(r)
@@ -51,6 +56,7 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 	}
 
 	fmt.Println(resp)
+	fmt.Println(err)
 	return err
 }
 
@@ -73,11 +79,7 @@ func NewRequest(b bytes.Buffer) Request {
 		k := toKey(key)
 		v := findNextSection(sub[1])[0]
 
-		rb, err := buildRequest(&r, k, v)
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println(rb)
+		buildRequest(&r, k, v)
 	}
 
 	return r
@@ -117,7 +119,9 @@ func buildRequest(r *Request, k string, v string) (*Request, error) {
 			r.Headers[key] = val
 		}
 	case body:
-		r.Body = v
+		if strings.TrimSpace(v) != "" {
+			r.Body = v
+		}
 	}
 
 	return r, nil

@@ -1,4 +1,7 @@
 Token: "this is the token"
 Name: "this is the name"
-Endpoint: "https://github.com/"
+Endpoint: "https://google.com/"
 Method: "GET"
+foo: "change me!"
+num: 1000
+floaty: 1.100

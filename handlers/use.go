@@ -108,6 +108,7 @@ func buildRequest(r *Request, k string, v string) (*Request, error) {
 			if len(header) == 0 {
 				continue
 			}
+
 			// TODO: Add some error handling
 			parts := strings.Split(header, ":")
 			if len(parts) < 2 {

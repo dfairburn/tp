@@ -43,10 +43,10 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 		return err
 	}
 
-	fmt.Println("method:", r.Method)
-	fmt.Println("url:", r.URL)
-	fmt.Println("body:", r.Body)
-	fmt.Println("headers:", r.Header)
+	logger.Println("method:", r.Method)
+	logger.Println("url:", r.URL)
+	logger.Println("body:", r.Body)
+	logger.Println("headers:", r.Header)
 
 	cli := http.Client{}
 
@@ -55,8 +55,8 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 		return err
 	}
 
-	fmt.Println(resp)
-	fmt.Println(err)
+	logger.Println(resp)
+	logger.Println(err)
 	return err
 }
 

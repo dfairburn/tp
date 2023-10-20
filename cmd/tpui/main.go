@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"log"
 
 	"github.com/jroimartin/gocui"
@@ -26,32 +26,33 @@ func main() {
 }
 
 func layout(g *gocui.Gui) error {
-	maxX, _ := g.Size()
-	v1, err := g.SetView("side", -1, 0, int(0.2*float32(maxX)), 5)
-	if err != nil {
-		if err != gocui.ErrUnknownView {
-			return err
-		}
+	maxX, maxY := g.Size()
 
-		fmt.Fprintln(v1, "Hello world 1")
+	if err := createView(g, "URL", 0, 0, maxX-1, 2); err != nil {
+		return err
 	}
-
-	v2, err := g.SetView("main", int(0.2*float32(maxX)), 0, maxX, 5)
-	if err != nil {
-		if err != gocui.ErrUnknownView {
-			return err
-		}
-
-		fmt.Fprintln(v2, "Hello world 2")
+	if err := createView(g, "Variable Overrides", 0, 3, int(0.4*float32(maxX)), int(0.7*float32(maxY))); err != nil {
+		return err
 	}
+	if err := createView(g, "Templates", 0, int(0.7*float32(maxY))+1, int(0.4*float32(maxX)), maxY-1); err != nil {
+		return err
+	}
+	if err := createView(g, "Body", int(0.4*float32(maxX))+2, 3, maxX-1, int(0.5*float32(maxY))); err != nil {
+		return err
+	}
+	if err := createView(g, "Response", int(0.4*float32(maxX))+2, int(0.5*float32(maxY))+1, maxX-1, maxY-1); err != nil {
+		return err
+	}
+	return nil
+}
 
-	v3, err := g.SetView("cmdline", -1, 0, maxX, 5)
+func createView(g *gocui.Gui, title string, x, y, width, height int) error {
+	v, err := g.SetView(title, x, y, width, height)
 	if err != nil {
-		if err != gocui.ErrUnknownView {
+		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
-
-		fmt.Fprintln(v3, "Hello world 3")
+		v.Title = title
 	}
 	return nil
 }

@@ -1,1 +1,2 @@
 variableDefinitionFile: "./vars.yaml"
+templatesDirectoryPath: "./templates"

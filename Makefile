@@ -1,7 +1,9 @@
 GOCMD=go
 GOTEST=$(GOCMD) test
 GOVET=$(GOCMD) vet
-BINARY_NAME=tp
+PROJECT_NAME=tp
+CLI_BINARY_NAME=tp
+UI_BINARY_NAME=tpui
 VERSION?=0.0.0
 SERVICE_PORT?=3000
 DOCKER_REGISTRY?= #if set it should finished by /
@@ -20,7 +22,8 @@ all: help
 ## Build:
 build: vendor ## Build your project and put the output binary in out/bin/
 	mkdir -p out/bin
-	GO111MODULE=on $(GOCMD) build -mod vendor -o out/bin/$(BINARY_NAME) .
+	GO111MODULE=on $(GOCMD) build -mod vendor -o bin/$(CLI_BINARY_NAME) ./cmd/tp
+	GO111MODULE=on $(GOCMD) build -mod vendor -o bin/$(UI_BINARY_NAME) ./cmd/tpui
 
 clean: ## Remove build related file
 	rm -fr ./bin
@@ -30,8 +33,11 @@ clean: ## Remove build related file
 vendor: ## Copy of all packages needed to support builds and tests in the vendor directory
 	$(GOCMD) mod vendor
 
-run: build ## Build and run the binary
-	./out/bin/$(BINARY_NAME)
+run_cli: build ## Build and run the binary
+	./out/bin/$(CLI_BINARY_NAME)
+
+run_ui: build ## Build and run the binary
+	./out/bin/$(UI_BINARY_NAME)
 
 ## Test:
 test: ## Run the tests of the project
@@ -75,14 +81,14 @@ endif
 
 ## Docker:
 docker-build: ## Use the dockerfile to build the container
-	docker build --rm --tag $(BINARY_NAME) .
+	docker build --rm --tag $(PROJECT_NAME) .
 
 docker-release: ## Release the container with tag latest and version
-	docker tag $(BINARY_NAME) $(DOCKER_REGISTRY)$(BINARY_NAME):latest
-	docker tag $(BINARY_NAME) $(DOCKER_REGISTRY)$(BINARY_NAME):$(VERSION)
+	docker tag $(PROJECT_NAME) $(DOCKER_REGISTRY)$(PROJECT_NAME):latest
+	docker tag $(PROJECT_NAME) $(DOCKER_REGISTRY)$(PROJECT_NAME):$(VERSION)
 # Push the docker images
-	docker push $(DOCKER_REGISTRY)$(BINARY_NAME):latest
-	docker push $(DOCKER_REGISTRY)$(BINARY_NAME):$(VERSION)
+	docker push $(DOCKER_REGISTRY)$(PROJECT_NAME):latest
+	docker push $(DOCKER_REGISTRY)$(PROJECT_NAME):$(VERSION)
 
 ## Help:
 help: ## Show this help.

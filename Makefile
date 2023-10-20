@@ -20,24 +20,23 @@ RESET  := $(shell tput -Txterm sgr0)
 all: help
 
 ## Build:
-build: vendor ## Build your project and put the output binary in out/bin/
-	mkdir -p out/bin
+build: vendor ## Build your project and put the output binary in bin/
+	mkdir -p bin
 	GO111MODULE=on $(GOCMD) build -mod vendor -o bin/$(CLI_BINARY_NAME) ./cmd/tp
 	GO111MODULE=on $(GOCMD) build -mod vendor -o bin/$(UI_BINARY_NAME) ./cmd/tpui
 
 clean: ## Remove build related file
 	rm -fr ./bin
-	rm -fr ./out
 	rm -f ./junit-report.xml checkstyle-report.xml ./coverage.xml ./profile.cov yamllint-checkstyle.xml
 
 vendor: ## Copy of all packages needed to support builds and tests in the vendor directory
 	$(GOCMD) mod vendor
 
-run_cli: build ## Build and run the binary
-	./out/bin/$(CLI_BINARY_NAME)
+run-cli: build ## Build and run the binary
+	./bin/$(CLI_BINARY_NAME)
 
-run_ui: build ## Build and run the binary
-	./out/bin/$(UI_BINARY_NAME)
+run-ui: build ## Build and run the binary
+	./bin/$(UI_BINARY_NAME)
 
 ## Test:
 test: ## Run the tests of the project

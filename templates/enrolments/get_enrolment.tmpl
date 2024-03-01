@@ -1,0 +1,12 @@
+===Url
+{{ .EnrolmentEndpoint }}
+
+===Method
+GET
+
+===Headers
+{{ if .Token }}
+  Authorization: Bearer {{ .Token }}
+{{ - end }}
+
+===Body

@@ -19,7 +19,8 @@ func LoadVars(logger *logging.Logger, paths ...string) map[interface{}]interface
 
 	f, err := tryFiles(logger, paths...)
 	if err != nil {
-		logger.Fatalf("error: %v", err)
+		logger.Errorf("unable to use var files, error: %v", err)
+		return y
 	}
 
 	data, err := io.ReadAll(f)
@@ -38,6 +39,21 @@ func LoadVars(logger *logging.Logger, paths ...string) map[interface{}]interface
 type Override struct {
 	Key   string
 	Value string
+}
+
+type Overrides []Override
+
+func (o *Overrides) ToMap() map[interface{}]interface{} {
+	m := make(map[interface{}]interface{})
+	if len(*o) == 0 {
+		return m
+	}
+
+	for _, ov := range *o {
+		m[ov.Key] = ov.Value
+	}
+
+	return m
 }
 
 func newOverride(o string, logger *logging.Logger) (Override, error) {

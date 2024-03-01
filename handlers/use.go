@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	httpurl "net/url"
@@ -30,14 +31,28 @@ var (
 )
 
 // Use gets a filepath and "uses" that template
-func Use(logger *logging.Logger, templateFile string, vars map[interface{}]interface{}, overrides []config.Override) error {
+func Use(logger *logging.Logger, templateFile string, vars map[interface{}]interface{}, overrides config.Overrides) error {
+	fmt.Println(vars)
+	fmt.Println(templateFile)
+	fmt.Println(overrides)
 	tp := template.Must(template.ParseFiles(templateFile))
 	overridden := Override(vars, overrides)
 
 	var buf bytes.Buffer
 	err := tp.Execute(&buf, overridden)
+	if err != nil {
+		return err
+	}
 
-	req := NewRequest(buf)
+	if len(buf.Bytes()) < 1 {
+		return errors.New("template not executed, missing variables")
+	}
+
+	req, err := NewRequest(buf)
+	if err != nil {
+		return err
+	}
+
 	r, err := req.toHttp()
 	if err != nil {
 		return err
@@ -67,22 +82,27 @@ type Request struct {
 	Url     *httpurl.URL
 }
 
-func NewRequest(b bytes.Buffer) Request {
-	r := Request{
+func NewRequest(b bytes.Buffer) (*Request, error) {
+	r := &Request{
 		Headers: make(map[string]string),
 	}
+
+	// get data for each section
 	for _, key := range keys {
 		sub := strings.Split(b.String(), key)
-		if len(sub) < 1 {
+		if len(sub) < 2 {
 			continue
 		}
 		k := toKey(key)
 		v := findNextSection(sub[1])[0]
 
-		buildRequest(&r, k, v)
+		err := buildRequest(r, k, v)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return r
+	return r, nil
 }
 
 func (r Request) toHttp() (*http.Request, error) {
@@ -90,13 +110,13 @@ func (r Request) toHttp() (*http.Request, error) {
 	return http.NewRequestWithContext(context.Background(), r.Method, r.Url.String(), reqBody)
 }
 
-func buildRequest(r *Request, k string, v string) (*Request, error) {
+func buildRequest(r *Request, k string, v string) error {
 	switch k {
 	case url:
 		trim(&v)
 		parsed, err := httpurl.Parse(v)
 		if err != nil {
-			return nil, fmt.Errorf("cannot parse %s as a url: %w", v, err)
+			return fmt.Errorf("cannot parse %s as a url: %w", v, err)
 		}
 		r.Url = parsed
 	case method:
@@ -125,7 +145,7 @@ func buildRequest(r *Request, k string, v string) (*Request, error) {
 		}
 	}
 
-	return r, nil
+	return nil
 }
 
 func trim(s ...*string) {
@@ -144,7 +164,11 @@ func toKey(s string) string {
 	return strings.ToLower(nonAlphaRegex.ReplaceAllString(s, ""))
 }
 
-func Override(vars map[interface{}]interface{}, overrides []config.Override) any {
+func Override(vars map[interface{}]interface{}, overrides config.Overrides) any {
+	if len(vars) == 0 {
+		return overrides.ToMap()
+	}
+
 	matchMap := lowerCaseMap(vars)
 
 	for _, override := range overrides {

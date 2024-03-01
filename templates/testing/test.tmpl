@@ -1,5 +1,10 @@
 ===Url
-http://localhost:8080
+{{ .nodeGrouping }}/v2/nodes/{{ .nodeID }}/enrolments
 
 ===Method
 GET
+
+===Headers
+{{ if .token }}
+  Authorization: Bearer {{ .token }}
+{{- end}}

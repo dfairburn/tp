@@ -32,9 +32,6 @@ var (
 
 // Use gets a filepath and "uses" that template
 func Use(logger *logging.Logger, templateFile string, vars map[interface{}]interface{}, overrides config.Overrides) error {
-	fmt.Println(vars)
-	fmt.Println(templateFile)
-	fmt.Println(overrides)
 	tp := template.Must(template.ParseFiles(templateFile))
 	overridden := Override(vars, overrides)
 
@@ -70,6 +67,7 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 		return err
 	}
 
+	fmt.Println(resp)
 	logger.Println(resp)
 	logger.Println(err)
 	return err
@@ -107,7 +105,16 @@ func NewRequest(b bytes.Buffer) (*Request, error) {
 
 func (r Request) toHttp() (*http.Request, error) {
 	reqBody := bytes.NewBufferString(r.Body)
-	return http.NewRequestWithContext(context.Background(), r.Method, r.Url.String(), reqBody)
+	req, err := http.NewRequestWithContext(context.Background(), r.Method, r.Url.String(), reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range r.Headers {
+		req.Header.Set(k, v)
+	}
+
+	return req, nil
 }
 
 func buildRequest(r *Request, k string, v string) error {

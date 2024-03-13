@@ -1,12 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"github.com/dfairburn/tp/config"
 	"github.com/dfairburn/tp/handlers"
-	"github.com/ktr0731/go-fuzzyfinder"
 	"github.com/spf13/cobra"
-	"log"
+	"os"
+	"regexp"
 )
 
 var (
@@ -33,12 +32,35 @@ var (
 			}
 
 			if len(args) < 1 {
-				templates, err := config.LoadTemplateFiles(logger, c.TemplatesDirectoryPath)
+				re, err := regexp.Compile(".*\\.tmpl$")
+				if err != nil {
+					return err
+				}
+
+				var templates []string
+				walkFunc := func(p string, info os.FileInfo, err error) error {
+					if err != nil {
+						return err
+					}
+					if ok := re.Match([]byte(p)); !ok {
+						logger.Errorf("path %v does not have .tmpl extension\n", p)
+						return nil
+					}
+					if info.IsDir() {
+						logger.Errorf("path %v is a directory\n", p)
+						return nil
+					}
+
+					templates = append(templates, p)
+					return nil
+				}
+
+				err = config.LoadTemplateFiles(logger, c.TemplatesDirectoryPath, walkFunc)
 				if err != nil {
 					logger.Fatalf("cannot find templates in templates dir %v, error: %v", c.TemplatesDirectoryPath, err)
 				}
 
-				t, err := fzfTemplate(templates)
+				t, err := fzf(templates)
 				if err != nil {
 					logger.Fatalf("cannot fuzzyfind templates %v", err)
 				}
@@ -65,23 +87,4 @@ func init() {
 	useCmd.Flags().StringSliceVarP(&overrides, "overrides", "o", []string{}, overrideUsage)
 
 	rootCmd.AddCommand(useCmd)
-}
-
-func fzfTemplate(paths []string) (string, error) {
-	template, err := fuzzyfinder.Find(paths,
-		func(i int) string {
-			return paths[i]
-		},
-		fuzzyfinder.WithPreviewWindow(func(i, w, h int) string {
-			if i == -1 {
-				return ""
-			}
-			return fmt.Sprintf("Template Path: %s", paths[i])
-		}),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("selected: %v\n", paths[template])
-	return paths[template], err
 }

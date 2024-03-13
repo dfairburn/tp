@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -60,38 +59,12 @@ func tryFiles(logger *logging.Logger, paths ...string) (*os.File, error) {
 	return nil, fmt.Errorf("no files existed: %s\n", strings.Join(expandedPaths, ", "))
 }
 
-func LoadTemplateFiles(l *logging.Logger, dirPath string) ([]string, error) {
-	var templates []string
+func LoadTemplateFiles(l *logging.Logger, dirPath string, walkFunc func(string, os.FileInfo, error) error) error {
 	path := tppaths.Expand(dirPath)
-	re, err := regexp.Compile(".*\\.tmpl$")
+	err := filepath.Walk(path, walkFunc)
 	if err != nil {
-		return nil, err
-	}
-	err = filepath.Walk(path,
-		func(p string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if ok := re.Match([]byte(p)); !ok {
-				l.Errorf("path %v does not have .tmpl extension\n", path)
-				return nil
-			}
-			if info.IsDir() {
-				l.Errorf("path %v is a directory\n", path)
-				return nil
-			}
-
-			templates = append(templates, p)
-			return nil
-		},
-	)
-	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if len(templates) < 1 {
-		return nil, fmt.Errorf("no templates in template dir %v", dirPath)
-	}
-
-	return templates, nil
+	return nil
 }

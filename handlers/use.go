@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	httpurl "net/url"
 	"regexp"
@@ -12,6 +13,7 @@ import (
 	"text/template"
 
 	"github.com/dfairburn/tp/config"
+
 	logging "github.com/sirupsen/logrus"
 )
 
@@ -67,7 +69,9 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 		return err
 	}
 
-	fmt.Println(resp)
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	fmt.Println(string(respBody))
 	logger.Println(resp)
 	logger.Println(err)
 	return err

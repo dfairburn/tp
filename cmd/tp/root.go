@@ -2,7 +2,10 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	"github.com/ktr0731/go-fuzzyfinder"
 	"io"
+	"log"
 	"os"
 	"time"
 
@@ -65,4 +68,17 @@ func initLogger() {
 		TimestampFormat: time.RFC3339,
 	}
 	logger.Formatter = &formatter
+}
+
+func fzf(paths []string) (string, error) {
+	template, err := fuzzyfinder.Find(paths,
+		func(i int) string {
+			return paths[i]
+		},
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("selected: %v\n", paths[template])
+	return paths[template], err
 }

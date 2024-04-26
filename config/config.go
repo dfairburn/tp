@@ -13,15 +13,16 @@ import (
 	logging "github.com/sirupsen/logrus"
 )
 
-func LoadOrDefaultConfig(logger *logging.Logger, paths ...string) (Config, error) {
+func LoadOrDefaultConfig(logger *logging.Logger, paths ...string) (Config, string, error) {
 	// this gives precedent to paths passed in via config and flags, then processes the default file paths
 	paths = append(paths, buildConfigPaths().paths...)
-	f, err := tryFiles(logger, paths...)
+	f, path, err := tryFiles(logger, paths...)
 	if err != nil {
 		logger.Error(err)
 	}
 
-	return loadConfig(f)
+	config, err := loadConfig(f)
+	return config, path, err
 }
 
 func loadConfig(f *os.File) (Config, error) {
@@ -41,7 +42,7 @@ type Config struct {
 	TemplatesDirectoryPath string `yaml:"templatesDirectoryPath"`
 }
 
-func tryFiles(logger *logging.Logger, paths ...string) (*os.File, error) {
+func tryFiles(logger *logging.Logger, paths ...string) (*os.File, string, error) {
 	var expandedPaths []string
 	for _, p := range paths {
 		expanded := tppaths.Expand(p)
@@ -53,10 +54,10 @@ func tryFiles(logger *logging.Logger, paths ...string) (*os.File, error) {
 			continue
 		}
 
-		return f, nil
+		return f, expanded, nil
 	}
 
-	return nil, fmt.Errorf("no files existed: %s\n", strings.Join(expandedPaths, ", "))
+	return nil, "", fmt.Errorf("no files existed: %s\n", strings.Join(expandedPaths, ", "))
 }
 
 func LoadTemplateFiles(l *logging.Logger, dirPath string, walkFunc func(string, os.FileInfo, error) error) error {

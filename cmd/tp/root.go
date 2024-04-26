@@ -18,13 +18,15 @@ import (
 
 var (
 	// global flags
-	c        config.Config
-	logger   = logging.New()
-	cfgFile  string
-	logFile  string
-	varsFile string
-	debug    bool
-	rootCmd  = &cobra.Command{
+	c          config.Config
+	configPath string
+	varsPath   string
+	logger     = logging.New()
+	cfgFile    string
+	logFile    string
+	varsFile   string
+	debug      bool
+	rootCmd    = &cobra.Command{
 		Use:   "tp",
 		Short: "tp is a configurable api client",
 		Long:  `some text about tp`,
@@ -48,11 +50,12 @@ func init() {
 }
 
 func initConfig() {
-	cfg, err := config.LoadOrDefaultConfig(logger, cfgFile)
+	cfg, path, err := config.LoadOrDefaultConfig(logger, cfgFile)
 	if err != nil {
 		logger.WithField("errors", err).Error("could not find any config files")
 	}
 
+	configPath = path
 	c = cfg
 }
 

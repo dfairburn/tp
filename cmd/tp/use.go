@@ -4,15 +4,18 @@ import (
 	"github.com/dfairburn/tp/config"
 	"github.com/dfairburn/tp/handlers"
 	"github.com/spf13/cobra"
+
 	"os"
 	"regexp"
 )
 
 var (
 	// local flags
+	overrideFlagName = "overrides"
 	// TODO: --help show all available overrides
-	overrides     []string
-	overrideUsage = "A comma separated list of variable overrides.\n" +
+	overrides       []string
+	loadedOverrides []string
+	overrideUsage   = "A comma separated list of variable overrides.\n" +
 		"A variable override is a list of strings in the following format:\n" +
 		"The of the name of the variable, followed by a colon, followed by the override value, e.g:\n" +
 		"--overrides=variableName1:overriddenValue1,variableName2:overriddenValue2" +
@@ -72,19 +75,32 @@ var (
 			}
 
 			var vars map[interface{}]interface{}
-			vars = config.LoadVars(logger, varsFile, c.VariableDefinitionFile)
-			overrides, err := config.ValidateOverrides(overrides, logger)
+			_, vars = config.LoadVars(logger, varsFile, c.VariableDefinitionFile)
+			o, err := config.ValidateOverrides(overrides, logger)
 			if err != nil {
 				logger.Fatalf("cannot use overrides due to errors: %v", err)
 			}
 
-			return handlers.Use(logger, template, vars, overrides)
+			return handlers.Use(logger, template, vars, o)
 		},
 	}
 )
 
 func init() {
-	useCmd.Flags().StringSliceVarP(&overrides, "overrides", "o", []string{}, overrideUsage)
+	useCmd.Flags().StringSliceVarP(&overrides, overrideFlagName, "o", []string{}, overrideUsage)
+	err := useCmd.RegisterFlagCompletionFunc(overrideFlagName, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		_, varMap := config.LoadVars(logger, varsFile, c.VariableDefinitionFile)
+		var vars []string
+		for key, _ := range varMap {
+			s := key.(string)
+			vars = append(vars, s)
+		}
+
+		return vars, cobra.ShellCompDirectiveDefault
+	})
+	if err != nil {
+		logger.WithError(err).Panic("cannot provide flag completions")
+	}
 
 	rootCmd.AddCommand(useCmd)
 }

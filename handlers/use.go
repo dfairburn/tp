@@ -180,26 +180,9 @@ func Override(vars map[interface{}]interface{}, overrides config.Overrides) any 
 		return overrides.ToMap()
 	}
 
-	matchMap := lowerCaseMap(vars)
-
 	for _, override := range overrides {
-		// lower-case key to match with lower-cased var map
-		lowerKey := strings.ToLower(override.Key)
-		if key, ok := matchMap[lowerKey]; ok {
-			vars[key] = override.Value
-		}
+		vars[override.Key] = override.Value
 	}
 
 	return vars
-}
-
-func lowerCaseMap(y map[interface{}]interface{}) map[string]string {
-	keyToLowercaseMappings := make(map[string]string)
-	for k, _ := range y {
-		if key, ok := k.(string); ok {
-			keyToLowercaseMappings[strings.ToLower(key)] = key
-		}
-	}
-
-	return keyToLowercaseMappings
 }

@@ -63,7 +63,7 @@ func newOverride(o string, logger *logging.Logger) (Override, error) {
 			"No colon was found to split name and value: %s", o)
 	}
 	if len(ovr) > 2 {
-		logger.Warnf("extra colon used in override. If these are meant to be separaate overrides, please add"+
+		logger.Warnf("extra colon used in override. If these are meant to be separate overrides, please add"+
 			" an extra colon to separate the overrides: %s", o)
 	}
 

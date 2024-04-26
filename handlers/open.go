@@ -23,7 +23,7 @@ const (
 ===Body`
 )
 
-func New(logger *logging.Logger, templateDir, template string) error {
+func Open(logger *logging.Logger, templateDir, template string) error {
 	expanded := tppaths.Expand(templateDir)
 	d, err := os.Stat(expanded)
 	if err != nil {

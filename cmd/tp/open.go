@@ -19,7 +19,7 @@ var (
 			}
 
 			filename := args[0]
-			return handlers.New(logger, c.TemplatesDirectoryPath, filename)
+			return handlers.Open(logger, c.TemplatesDirectoryPath, filename)
 		},
 	}
 )

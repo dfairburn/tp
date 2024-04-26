@@ -7,7 +7,7 @@
 
 2. Create a `cp` subcommand to copy templates. Again use fzf here
 
-3. Create an `edit` subcommand so you can find and edit teplates from the cli. Fzf on all templates then open in vim
+3. Create an `edit` subcommand, so you can find and edit templates from the cli. Fzf on all templates then open in vim
 
 4. Would be nice to have the idea of folders, or labels? Maybe an extra field in the template
 
@@ -15,3 +15,13 @@
 
 6. Would be good to have all the organizational and editorial stuff in a library, maybe separate to this repo?
 		* this repo could then focus on the whole cli stuff and being specific over http clients
+
+Hackday - 26/04/2024
+
+- PP output for html and json
+- Implement `get-token` into `use`
+- Suggestions of vars that are available
+- cmd alias to edit vars file
+- cmd alias to edit config file
+- shell autocompletion on overrides
+- vim autocompletion on overrides

@@ -1,12 +1,14 @@
 package main
 
 import (
-	"github.com/dfairburn/tp/config"
-	"github.com/spf13/cobra"
 	"io"
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/dfairburn/tp/config"
+
+	"github.com/spf13/cobra"
 )
 
 var (

@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"github.com/ktr0731/go-fuzzyfinder"
 	"io"
 	"log"
@@ -82,6 +81,5 @@ func fzf(paths []string) (string, error) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("selected: %v\n", paths[template])
 	return paths[template], err
 }

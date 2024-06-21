@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	httpurl "net/url"
+	"os"
 	"regexp"
 	"strings"
 	"text/template"
@@ -71,10 +72,18 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
-	fmt.Println(string(respBody))
+	if err != nil {
+		logger.Println(err)
+		return err
+	}
 	logger.Println(resp)
-	logger.Println(err)
-	return err
+	_, err = io.WriteString(os.Stdout, string(respBody))
+	if err != nil {
+		logger.Println(err)
+		return err
+	}
+
+	return nil
 }
 
 type Request struct {

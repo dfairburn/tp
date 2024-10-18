@@ -23,7 +23,6 @@ all: help
 build: vendor ## Build your project and put the output binary in bin/
 	mkdir -p bin
 	GO111MODULE=on $(GOCMD) build -mod vendor -o bin/$(CLI_BINARY_NAME) ./cmd/tp
-	GO111MODULE=on $(GOCMD) build -mod vendor -o bin/$(UI_BINARY_NAME) ./cmd/tpui
 
 clean: ## Remove build related file
 	rm -fr ./bin

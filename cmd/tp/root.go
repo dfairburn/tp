@@ -55,7 +55,13 @@ func initConfig() {
 	}
 
 	configPath = path
-	c = cfg
+	expandedTemplateDirPath := paths.Expand(cfg.TemplatesDirectoryPath)
+	expandedVariablePath := paths.Expand(cfg.VariableDefinitionFile)
+
+	c = config.Config{
+		VariableDefinitionFile: expandedVariablePath,
+		TemplatesDirectoryPath: expandedTemplateDirPath,
+	}
 }
 
 func initLogger() {
@@ -72,14 +78,14 @@ func initLogger() {
 	logger.Formatter = &formatter
 }
 
-func fzf(paths []string) (string, error) {
+func fzf(paths []FilePath) (string, error) {
 	template, err := fuzzyfinder.Find(paths,
 		func(i int) string {
-			return paths[i]
+			return paths[i].Relative
 		},
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return paths[template], err
+	return paths[template].Absolute, err
 }

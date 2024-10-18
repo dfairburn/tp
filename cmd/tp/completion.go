@@ -32,8 +32,30 @@ Zsh:
   # To load completions for each session, execute once:
   $ %[1]s completion zsh > "${fpath[1]}/_%[1]s"
 
-  # You will need to start a new shell for this setup to take effect.
 
+  # If you do not have access to "${fpath[1]}/_%[1]s" then you can add
+  # the following to your .zshrc
+
+  $ read -r -d '' COMPLETE_VAR << EOM
+  ZSH_COMPDUMP="$HOME/.cache/zsh/zcompcache"
+
+  # Create the parent directory if it doesn't exist
+  [[ -d $ZSH_COMPDUMP ]] || mkdir -p $ZSH_COMPDUMP
+
+  _comp_files=($ZSH_COMPDUMP/zcompdump(Nm-20))
+  if (( $#_comp_files )); then
+      autoload -Uz compinit -C -d "$ZSH_COMPDUMP/.zcompdump-${ZSH_VERSION}"
+  else
+      autoload -Uz compinit -d "$ZSH_COMPDUMP/.zcompdump-${ZSH_VERSION}"
+  fi
+EOM
+  echo $COMPLETE_VAR >> ~/.zshrc
+
+  # To load completions for each session, execute once:
+  $ %[1]s completion zsh > "$ZSH_COMPDUMP/_%[1]s"
+
+  # You will need to start a new shell for this setup to take effect.
+  
 fish:
 
   $ %[1]s completion fish | source

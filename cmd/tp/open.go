@@ -3,12 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"regexp"
+
 	"github.com/dfairburn/tp/config"
 	"github.com/dfairburn/tp/handlers"
 	tppaths "github.com/dfairburn/tp/paths"
 	"github.com/spf13/cobra"
-	"os"
-	"regexp"
 )
 
 var (
@@ -55,7 +56,6 @@ var (
 					return nil
 				}
 
-				fmt.Printf("%v\n", filename)
 				templates = append(templates, filename)
 				return nil
 			}

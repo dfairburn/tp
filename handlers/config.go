@@ -12,8 +12,6 @@ import (
 func Config(logger *logging.Logger, path string) error {
 	expanded := tppaths.Expand(path)
 
-	fmt.Printf("got expenaded: %+v\n", expanded)
-
 	if _, err := os.Stat(expanded); errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("error finding config file %s: %v", expanded, err)
 	}

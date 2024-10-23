@@ -126,7 +126,6 @@ var (
 					return nil
 				}
 
-				fmt.Printf("%v\n", filename)
 				templates = append(templates, filename)
 				return nil
 			}

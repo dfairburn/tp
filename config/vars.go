@@ -46,6 +46,7 @@ func expandVars(y map[any]any) map[any]any {
 	expandedMap := make(map[any]any)
 
 	for key, value := range y {
+		fmt.Printf("GOT KEY: %v OF TYPE %T\n", key, value)
 		switch value.(type) {
 		case string:
 			v := value.(string)
@@ -80,10 +81,18 @@ func expandVars(y map[any]any) map[any]any {
 
 			expanded := strings.TrimSuffix(out.String(), "\n")
 			expandedMap[key] = expanded
-		case map[any]any:
-			m := value.(map[any]any)
+		case map[string]interface{}:
+			// need to cast the map back into a map[interface{}]interface{} to feed back into
+			// the expandVars func to be able to expand nested vars
+			m := make(map[interface{}]interface{})
+			v := value.(map[string]interface{})
+			for k, vv := range v {
+				m[k] = vv
+			}
+
 			expanded := expandVars(m)
 			expandedMap[key] = expanded
+			continue
 		default:
 			expandedMap[key] = value
 			continue

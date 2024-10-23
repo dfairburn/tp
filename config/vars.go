@@ -46,7 +46,6 @@ func expandVars(y map[any]any) map[any]any {
 	expandedMap := make(map[any]any)
 
 	for key, value := range y {
-		fmt.Printf("GOT KEY: %v OF TYPE %T\n", key, value)
 		switch value.(type) {
 		case string:
 			v := value.(string)

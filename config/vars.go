@@ -4,12 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
+	"os/exec"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
 	logging "github.com/sirupsen/logrus"
 )
+
+const ShellToUse = "bash"
 
 func LoadVars(logger *logging.Logger, paths ...string) (string, map[interface{}]interface{}) {
 	y := make(map[interface{}]interface{})
@@ -33,7 +38,59 @@ func LoadVars(logger *logging.Logger, paths ...string) (string, map[interface{}]
 		logger.Fatalf("error: %v", err)
 	}
 
-	return path, y
+	variables := expandVars(y)
+
+	return path, variables
+}
+
+func expandVars(y map[any]any) map[any]any {
+	expandedMap := make(map[any]any)
+
+	for key, value := range y {
+		switch value.(type) {
+		case string:
+			v := value.(string)
+			re := regexp.MustCompile("\\$\\((?P<command>.*)\\)")
+			result := make(map[string]string)
+			if !re.MatchString(v) {
+				expandedMap[key] = value
+				continue
+			}
+
+			match := re.FindStringSubmatch(v)
+			for i, name := range re.SubexpNames() {
+				if i != 0 && name != "" {
+					result[name] = match[i]
+				}
+			}
+
+			cmd, ok := result["command"]
+			if !ok {
+				expandedMap[key] = value
+				continue
+			}
+
+			e := exec.Command(ShellToUse, "-c", cmd)
+			var out strings.Builder
+			e.Stdout = &out
+			err := e.Run()
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			expanded := strings.TrimSuffix(out.String(), "\n")
+			expandedMap[key] = expanded
+		case map[any]any:
+			m := value.(map[any]any)
+			expanded := expandVars(m)
+			expandedMap[key] = expanded
+		default:
+			expandedMap[key] = value
+			continue
+		}
+	}
+
+	return expandedMap
 }
 
 type Override struct {

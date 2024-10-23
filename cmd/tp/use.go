@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"regexp"
+
 	"github.com/dfairburn/tp/config"
 	"github.com/dfairburn/tp/handlers"
 	"github.com/dfairburn/tp/paths"
 	"github.com/spf13/cobra"
-	"os"
-	"regexp"
 )
 
 var (
@@ -88,6 +89,7 @@ var (
 
 			var vars map[interface{}]interface{}
 			_, vars = config.LoadVars(logger, varsFile, c.VariableDefinitionFile)
+
 			o, err := config.ValidateOverrides(overrides, logger)
 			if err != nil {
 				logger.Fatalf("cannot use overrides due to errors: %v", err)

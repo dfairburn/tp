@@ -9,7 +9,7 @@ Tp is a command-line utility to create and reuse templated http requests.
 
 ### Installation
 
-TODO
+
 
 ### Creating a template
 
@@ -113,6 +113,10 @@ Content-Type: {{ .content-type }}
 You can then run `tp use example` to execute this template and with the provided variables.
 
 ### Variables currently support
+#### Overriding
+
+You can override template variables by passing the `-o` flag, to the `use` command. You can read more about this in the 
+[tp use](#tp-use) section.
 #### Nesting
 
 You are able to nest variables (like you would in the standard yaml format) and use them in your templates:
@@ -140,16 +144,168 @@ Authorization: Bearer {{ .token }}
 ```
 
 This gets evaluated by your shell (defined by the `$SHELL` env var) on the load of the variable file.
-    
+
+#### Notes on Variables
+
+The Variables file is defined in yaml, however the go `templating` package doesn't seem to like varaibles
+that have `-` in the name, `A-Za-z`, `0-9` and `_` are valid for variable names.
 
 ## Subcommands
-
 ### tp use
+`tp use` takes a given template, interpolates the variables defined in the configured variable file, takes
+in any defined overrides for these variables, and sends an http request to the url defined in the template
+
+You can either give `tp use` a filename, or you can execute it without a filename and tp will open a fuzzyfind within
+your configured templates directory.
+
+**Note**
+The default templates directory is `~/.tp/templates`, however you can define your own within the `~/.tp/config.yml` file.
+
+**Nesting**
+`tp use` supports the execution and searching of templates nested in directories, for example, given the directory structure:
+
+```
+templates/
+  jsonapi/
+    example.tmpl
+```
+
+you can execute:
+
+```shell
+tp use jsonapi/example
+```
+
+and tp will execute the existing template at `~/.tp/templates/jsonapi/example.tmpl`
+
+**Example:**
+
+`tp use example` will execute the template defined at: `~/.tp/templates/example` (if using the default templates directory location)
+
+**Shell Completion:**
+
+`tp use` supports tab completion, and you can find out how to set this up for your shell in the 
+[tp completion](#tp-completion) section
+
+Flags:
+
+| Short | Long        | Description                                                                    |
+|-------|-------------|--------------------------------------------------------------------------------|
+| -o    | --overrides | A list of variable overrides, either comma-separated or by repeating the flag. |
+| -h    | --help      | Displays the help text for the `use` command.                                  |
+
+Example `-o` usage:
+
+```shell
+tp use -o user:"1" -o content_type:"application/json" -o time:$(time)
+```
+
+```shell
+tp use --overrides user:"1" --overrides content_type:"application/json" --overrides time:$(time)
+```
+
+```shell
+tp use --overrides user:"1",content_type:"application/json",time:$(time)
+```
+
 ### tp open
+
+`tp open` takes a filename as a command and either opens a new template, with the default template syntax, or opens
+an already existing template.
+
+**Note**
+The default templates directory is `~/.tp/templates`, however you can define your own within the `~/.tp/config.yml` file.
+
 ### tp vars
+
+`tp vars` opens the variable file defined in your tp config (default: `~/.tp/config.yml`) in your configured editor. The
+editor is chosen based on what your `$EDITOR` environment variable is set to
+
+**Note**
+
+If your `$EDITOR` env var is not set, the default editor will be `vim`
+
 ### tp list
+
+`tp list` prints the absolute path for all of your templates in your configured templates dir to STDOUT
+
 ### tp completion
+
+`tp completion` prints the instructions to follow for installing shell completions. For completeness, I'll also state
+these below:
+
+To load completions:
+
+**Bash:**
+```shell
+source <(tp completion bash)
+```
+To load completions for each session, execute once:
+
+**Linux:**
+```shell
+tp completion bash > /etc/bash_completion.d/tp
+```
+**macOS:**
+```shell
+tp completion bash > $(brew --prefix)/etc/bash_completion.d/tp
+```
+
+---
+
+**Zsh:**
+
+If shell completion is not already enabled in your environment,
+you will need to enable it.  You can execute the following once:
+
+```shell
+echo "autoload -U compinit; compinit" >> ~/.zshrc
+```
+
+To load completions for each session, execute once:
+```shell
+tp completion zsh > "${fpath[1]}/_tp"
+```
+
+You will need to start a new shell for this setup to take effect.
+
+---
+  
+**fish:**
+
+```shell
+tp completion fish | source
+```
+To load completions for each session, execute once:
+```shell
+tp completion fish > ~/.config/fish/completions/tp.fish
+```
+
+---
+
+**PowerShell:**
+
+```
+PS> tp completion powershell | Out-String | Invoke-Expression
+```
+
+To load completions for every new session, run:
+```
+PS> tp completion powershell > tp.ps1
+```
+and source this file from your PowerShell profile.
+
 ### tp config
+
+`tp config` loads the config file defined at `~/.tp/config.yml`. This is where the default locations for
+your templates directory and variables file are stored. The default `~/.tp/config.yml` looks as follows:
+
+```yaml
+---
+
+variableDefinitionFile: "~/.tp/vars.yml"
+templatesDirectoryPath: "~/.tp/templates"
+```
 
 ### Templates
 
@@ -169,7 +325,7 @@ tp has the notion of "templates", which are structured files that hold data to c
 // the data body to be sent with the HTTP request
 ```
 
-Templates are made using Go's template package https://pkg.go.dev/text/template. As you can see from the example below, 
+Templates are made using [Go's template package](https://pkg.go.dev/text/template). As you can see from the example below, 
 there are some [variables](#variables) that are captured within curly braces. Variables are defined in yaml files that are given as 
 an input flag, or defined by config. You may also provide command-line overrides of specific variables.
 
@@ -207,7 +363,7 @@ Accept: application/json
     - The http body to be sent with the request.
 
 
-### [Variables]
+### Variables
 
 Variables can be input in two forms, either configuring a variables file<sup>1</sup>, or providing them via command-line
 overrides.
@@ -216,6 +372,4 @@ overrides.
 <sup>1</sup> Should also consider providing directories for more complex variable layouts. Not sure if this comes free 
 with yaml parsing or not.
 
-#### Example
-
-### [Config]
+### Config

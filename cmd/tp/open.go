@@ -78,7 +78,7 @@ func init() {
 }
 
 func stripTemplateDir(tmpDir, path string) string {
-	re := regexp.MustCompile(fmt.Sprintf("(?:%s)(?P<filename>[a-zA-Z\\/\\.]+)", tmpDir))
+	re := regexp.MustCompile(fmt.Sprintf("(?:%s)(?P<filename>[0-9a-zA-Z\\/\\.\\_\\-]+)", tmpDir))
 	matches := re.FindStringSubmatch(path)
 	keys := re.SubexpNames()
 	m := make(map[string]string)

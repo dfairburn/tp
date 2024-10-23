@@ -49,11 +49,22 @@ tp use example
 ```
 
 ```json5
+// example response from jsonplaceholder.typicode.com
 {
-  // some json response...
+  "id": 1,
+  "name": "Leanne Graham",
+  "username": "Bret",
+  "email": "Sincere@april.biz",
+  "address": {
+    // ...
+  },
+  "phone": "1-770-736-8031 x56442",
+  "website": "hildegard.org",
+  "company": {
+    // ...
+  }
 }
 ```
-
 
 #### Notes
 * There are more ways to execute the `tp use` subcommand, to read about the other options, head to [the tp use command](tp-use)
@@ -61,7 +72,8 @@ tp use example
 
 ### Using Variables
 
-This is all well and good, but the whole point of this is to template out these requests to make them easier to use and configure. So let's add some variables.
+This is all well and good, but the whole point of this is to template out these requests to make them easier to use, 
+configure and mutate on the fly. So let's add some variables.
 
 Execute the following command to open up the varaibles file in your default editor:
 
@@ -75,8 +87,60 @@ Which should open up an empty yaml file with the filepath `~/.tp/vars` and shoul
 ---
 ```
 
+Let's add a new variable to this file like so:
+```yaml
+---
 
-// TODO - finish the readme :D
+content-type: application/json
+user: 1
+```
+
+We can then edit the template file by using `tp open example` and making the template file look as follows:
+
+```
+===Url
+https://jsonplaceholder.typicode.com/users/{{ .user }}
+
+===Method
+GET
+
+===Headers
+Content-Type: {{ .content-type }}
+
+===Body
+```
+
+You can then run `tp use example` to execute this template and with the provided variables.
+
+### Variables currently support
+#### Nesting
+
+You are able to nest variables (like you would in the standard yaml format) and use them in your templates:
+```yaml
+users:
+  user_1: test_username_guid
+```
+which in the template can be referenced like so:
+```
+===Url
+https://jsonplaceholder.typicode.com/users/{{ .users.user_1 }}
+```
+
+#### Shell expansion
+You're able to pass in commands that are executed by the shell to be stored inside of variables to be reused in your templates:
+
+```yaml
+token: $(get-api-token)
+```
+
+Which can be referenced as you would a normal/nested variable:
+```
+===Headers
+Authorization: Bearer {{ .token }}
+```
+
+This gets evaluated by your shell (defined by the `$SHELL` env var) on the load of the variable file.
+    
 
 ## Subcommands
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -13,8 +14,6 @@ import (
 
 	logging "github.com/sirupsen/logrus"
 )
-
-const ShellToUse = "bash"
 
 func LoadVars(logger *logging.Logger, paths ...string) (string, map[interface{}]interface{}) {
 	y := make(map[interface{}]interface{})
@@ -70,7 +69,8 @@ func expandVars(y map[any]any) map[any]any {
 				continue
 			}
 
-			e := exec.Command(ShellToUse, "-c", cmd)
+			shell := os.Getenv("SHELL")
+			e := exec.Command(shell, "-c", cmd)
 			var out strings.Builder
 			e.Stdout = &out
 			err := e.Run()

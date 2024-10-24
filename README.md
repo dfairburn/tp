@@ -19,6 +19,19 @@ GUI-based API dev tools. The driving motivation for tp was to build something th
 Requirements:
   * Go v1.20
 
+Run the `go install` command, and make sure that your `$GOPATH` is in your `$PATH`, otherwise your shell will not
+pick up the install of the binary.
+```shell
+go install github.com/dfairburn/tp/cmd/tp@latest
+```
+
+Run the `tp init` command to set up all of the default directories and config.
+```shell
+tp init
+```
+
+You're now ready to start!
+
 ### Creating a template
 
 To create your first template, you can use the `tp open` command:

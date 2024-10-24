@@ -33,3 +33,6 @@ Hackday - 26/04/2024
     UPDATE: This is actually possible, and the `tp completion {bash|fish|zsh|powershell}` command will pick up completions
     for override flags.
 [X] Autocomplete template files for use command
+
+More todos:
+[ ] Add an `-e` flag (`--environment`) to alias config files. Maybe even rename the `config` to `environment`?

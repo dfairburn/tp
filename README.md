@@ -2,7 +2,12 @@
 
 <img src="https://github.com/dfairburn/tp/assets/47511336/48b17b4e-68ad-4d5b-af26-f60a70dcd0b5" width=200 />
 
-Tp is a command-line utility to create and reuse templated http requests.
+Tp is a command-line utility to create and reuse templated http requests. Tp was created as an alternative to 
+GUI-based API dev tools. The driving motivation for tp was to build something that is:
+* simple to use
+* able to open all your templates and environment variables in any editor of your choice
+* modular and reusable
+* configurable at the point of execution (providing overrides on the command-line for variables that could change frequently)
 
 ---
 ## Quickstart
@@ -141,6 +146,16 @@ The Variables file is defined in yaml, however the go `templating` package doesn
 that have `-` in the name, `A-Za-z`, `0-9` and `_` are valid for variable names.
 
 ## Subcommands
+#### Global Flags
+
+| Short | Long     | Description                                                                             |
+|-------|----------|-----------------------------------------------------------------------------------------|
+|       | --config | An override for the location of the config file to use (defaults to: ~/.tp/config.yml)  |
+|       | --vars   | An override for the location of the variables file to use (defaults to: ~/.tp/vars.yml) |
+|       | --debug  | Redirects all logging to STDOUT                                                         |
+|       | --log    | An override for the destination of the logfile to be written to                         |
+| -h    | --help   | Displays the help text for the `use` command.                                           |
+
 ### tp use
 `tp use` takes a given template, interpolates the variables defined in the configured variable file, takes
 in any defined overrides for these variables, and sends an http request to the url defined in the template

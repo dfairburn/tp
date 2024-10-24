@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/dfairburn/tp/config"
+	"github.com/dfairburn/tp/static"
 
 	"github.com/spf13/cobra"
 )
@@ -19,7 +20,7 @@ var (
 		Long:  "List returns all the templates in the configured templates directory",
 		Args:  cobra.MinimumNArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			re, err := regexp.Compile(".*\\.tmpl$")
+			re, err := regexp.Compile(static.YamlRegex)
 			if err != nil {
 				return err
 			}
@@ -30,7 +31,7 @@ var (
 					return err
 				}
 				if ok := re.Match([]byte(p)); !ok {
-					logger.Errorf("path %v does not have .tmpl extension\n", p)
+					logger.Errorf("path %v does not have yaml extension\n", p)
 					return nil
 				}
 				if info.IsDir() {

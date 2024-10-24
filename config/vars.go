@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"regexp"
@@ -37,12 +36,12 @@ func LoadVars(logger *logging.Logger, paths ...string) (string, map[interface{}]
 		logger.Fatalf("error: %v", err)
 	}
 
-	variables := expandVars(y)
+	variables := expandVars(logger, y)
 
 	return path, variables
 }
 
-func expandVars(y map[any]any) map[any]any {
+func expandVars(logger *logging.Logger, y map[any]any) map[any]any {
 	expandedMap := make(map[any]any)
 
 	for key, value := range y {
@@ -75,7 +74,11 @@ func expandVars(y map[any]any) map[any]any {
 			e.Stdout = &out
 			err := e.Run()
 			if err != nil {
-				log.Fatal(err)
+				logger.
+					WithField("shell", shell).
+					WithField("command", cmd).
+					WithError(err).
+					Fatal("error expanding variable file, executing command")
 			}
 
 			expanded := strings.TrimSuffix(out.String(), "\n")
@@ -89,7 +92,7 @@ func expandVars(y map[any]any) map[any]any {
 				m[k] = vv
 			}
 
-			expanded := expandVars(m)
+			expanded := expandVars(logger, m)
 			expandedMap[key] = expanded
 			continue
 		default:

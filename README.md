@@ -21,19 +21,14 @@ tp open example
 
 This should open up your default configured editor using the `$EDITOR` environment variable (which defaults to `vim`). You can then populate the default template with the following values:
 
-```
-===Url
-https://jsonplaceholder.typicode.com/users
-
-===Method
-GET
-
-===Headers
-
-===Body
+```yaml
+url: https://jsonplaceholder.typicode.com/users
+method: GET
+headers:
+body:
 ```
 
-Once written, a file will have been written to `~/.tp/templates/example.tmpl` and you'll be ready to use it.
+Once written, a file will have been written to `~/.tp/templates/example.yml` and you'll be ready to use it.
 
 #### Notes
 
@@ -75,39 +70,32 @@ tp use example
 This is all well and good, but the whole point of this is to template out these requests to make them easier to use, 
 configure and mutate on the fly. So let's add some variables.
 
-Execute the following command to open up the varaibles file in your default editor:
+Execute the following command to open up the varaibles file in your default editor.
+On first run, this should open up an empty yaml file with the filepath `~/.tp/vars`.
 
 ```shell
 tp vars
 ```
 
-Which should open up an empty yaml file with the filepath `~/.tp/vars` and should look like this:
-
-```yaml
----
-```
 
 Let's add a new variable to this file like so:
+
+**NOTE:** Go's templating package does not support `-`, hence why it is not used here!
 ```yaml
 ---
 
-content-type: application/json
+content_type: application/json
 user: 1
 ```
 
 We can then edit the template file by using `tp open example` and making the template file look as follows:
 
-```
-===Url
-https://jsonplaceholder.typicode.com/users/{{ .user }}
-
-===Method
-GET
-
-===Headers
-Content-Type: {{ .content-type }}
-
-===Body
+```yaml
+url: https://jsonplaceholder.typicode.com/users/{{ .user }}
+method: GET
+headers:
+  - Content-Type: {{ .content_type }}
+body:
 ```
 
 You can then run `tp use example` to execute this template and with the provided variables.
@@ -125,9 +113,8 @@ users:
   user_1: test_username_guid
 ```
 which in the template can be referenced like so:
-```
-===Url
-https://jsonplaceholder.typicode.com/users/{{ .users.user_1 }}
+```yaml
+url: https://jsonplaceholder.typicode.com/users/{{ .users.user_1 }}
 ```
 
 #### Shell expansion
@@ -138,9 +125,9 @@ token: $(get-api-token)
 ```
 
 Which can be referenced as you would a normal/nested variable:
-```
-===Headers
-Authorization: Bearer {{ .token }}
+```yaml
+headers:
+  - Authorization: Bearer {{ .token }}
 ```
 
 This gets evaluated by your shell (defined by the `$SHELL` env var) on the load of the variable file.
@@ -167,7 +154,7 @@ The default templates directory is `~/.tp/templates`, however you can define you
 ```
 templates/
   jsonapi/
-    example.tmpl
+    example.yml
 ```
 
 you can execute:
@@ -176,7 +163,7 @@ you can execute:
 tp use jsonapi/example
 ```
 
-and tp will execute the existing template at `~/.tp/templates/jsonapi/example.tmpl`
+and tp will execute the existing template at `~/.tp/templates/jsonapi/example.yml`
 
 **Example:**
 
@@ -309,20 +296,18 @@ templatesDirectoryPath: "~/.tp/templates"
 
 ### Templates
 
-tp has the notion of "templates", which are structured files that hold data to construct HTTP requests. The template structure is as follows:
+tp has the notion of "templates", which are yaml files that hold data to construct HTTP requests. The template structure is as follows:
 
-```
-===Url
-// the target url of the HTTP request
-
-===Method
-// the HTTP method to be used
-
-===Headers
-// any additional headers to be sent with the request
-
-===Body
-// the data body to be sent with the HTTP request
+```yaml
+# the target url of the HTTP request
+url: 
+# the HTTP method to be used
+method: 
+# any additional headers to be sent with the request
+headers:
+  -
+# the data body to be sent with the HTTP request
+body:
 ```
 
 Templates are made using [Go's template package](https://pkg.go.dev/text/template). As you can see from the example below, 
@@ -330,36 +315,36 @@ there are some [variables](#variables) that are captured within curly braces. Va
 an input flag, or defined by config. You may also provide command-line overrides of specific variables.
 
 #### Example
-```
-===Url
+```yaml
+url: |
 {{ if .UrlAddress }}
-    {{ .UrlAddress}}
+{{ .UrlAddress}}
 {{ else }}
-    https://a_url.com
+    https://jsonplaceholder.typicode.com/users
 {{- end}}
 
-===Method
-GET
 
-===Headers
-Authorization: Bearer {{ .Token }}
-Accept: application/json
+method: GET
 
-===Body
+headers:
+  - Authorization: Bearer {{ .Token }}
+  - Accept: application/json
+
+body: >
 {
-    "data": {
-        "name": "{{ .Name }}"
-    }
+  "data": {
+    "name": "{{ .Name }}"
+  }
 }
 ```
 
-- ===Url
+- url
   - The url to make requests to.
-- ===Method
+- method
     - The http verb to use.
-- ===Headers
+- headers
     - A list of http headers, each one on a newline.
-- ===Body
+- body
     - The http body to be sent with the request.
 
 

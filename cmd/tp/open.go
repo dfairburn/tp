@@ -32,7 +32,7 @@ var (
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
 			var templates []string
-			re, err := regexp.Compile(".*\\.tmpl$")
+			re, err := regexp.Compile("(?:.*\\.yaml$|.*\\.yml)")
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
@@ -42,7 +42,7 @@ var (
 					return err
 				}
 				if ok := re.Match([]byte(p)); !ok {
-					logger.Errorf("path %v does not have .tmpl extension\n", p)
+					logger.Errorf("path %v does not have yaml extension\n", p)
 					return nil
 				}
 				if info.IsDir() {

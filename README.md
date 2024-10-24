@@ -9,7 +9,10 @@ Tp is a command-line utility to create and reuse templated http requests.
 
 ### Installation
 
+#### Go
 
+Requirements:
+  * Go v1.20
 
 ### Creating a template
 
@@ -316,7 +319,7 @@ an input flag, or defined by config. You may also provide command-line overrides
 
 #### Example
 ```yaml
-url: |
+url: >
 {{ if .UrlAddress }}
 {{ .UrlAddress}}
 {{ else }}
@@ -337,16 +340,6 @@ body: >
   }
 }
 ```
-
-- url
-  - The url to make requests to.
-- method
-    - The http verb to use.
-- headers
-    - A list of http headers, each one on a newline.
-- body
-    - The http body to be sent with the request.
-
 
 ### Variables
 

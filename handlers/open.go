@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/dfairburn/tp/static"
 	logging "github.com/sirupsen/logrus"
@@ -28,14 +29,22 @@ func Open(logger *logging.Logger, templateDir, template string) error {
 		return fmt.Errorf("configured templates dir %s is not a directory", expanded)
 	}
 
-	path := filepath.Join(expanded, template)
-	dir, file := filepath.Split(path)
+	var path = template
+	if !filepath.IsAbs(template) {
+		path = filepath.Join(expanded, template)
+	}
+
+	dir, _ := filepath.Split(path)
 	err = os.MkdirAll(dir, 0755)
-	if err != nil {
+	if err != nil && !os.IsExist(err) {
 		return err
 	}
 
-	if filepath.Ext(file) != ".yml" || filepath.Ext(file) != ".yaml" || filepath.Ext(file) == "" {
+	if filepath.Ext(path) == ".yaml" {
+		path = strings.TrimSuffix(path, ".yaml") + ".yml"
+	}
+
+	if filepath.Ext(path) == "" {
 		path = path + ".yml"
 	}
 

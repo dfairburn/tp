@@ -83,7 +83,7 @@ tp use example
 ```
 
 #### Notes
-* There are more ways to execute the `tp use` subcommand, to read about the other options, head to [the tp use command](tp-use)
+* There are more ways to execute the `tp use` subcommand, to read about the other options, head to [the tp use command](#tp-use)
 
 
 ### Using Variables
@@ -115,7 +115,8 @@ We can then edit the template file by using `tp open example` and making the tem
 url: https://jsonplaceholder.typicode.com/users/{{ .user }}
 method: GET
 headers:
-  - Content-Type: {{ .content_type }}
+  # Note that Content_Type uses an underscore, instead of a hyphen to comply with the go template/yaml parsing
+  Content_Type: {{ .content_type }}
 body:
 ```
 
@@ -148,7 +149,7 @@ token: $(get-api-token)
 Which can be referenced as you would a normal/nested variable:
 ```yaml
 headers:
-  - Authorization: Bearer {{ .token }}
+  Authorization: Bearer {{ .token }}
 ```
 
 This gets evaluated by your shell (defined by the `$SHELL` env var) on the load of the variable file.
@@ -334,9 +335,8 @@ tp has the notion of "templates", which are yaml files that hold data to constru
 url: 
 # the HTTP method to be used
 method: 
-# any additional headers to be sent with the request
+# a map of any additional headers to be sent with the request
 headers:
-  -
 # the data body to be sent with the HTTP request
 body:
 ```
@@ -358,8 +358,8 @@ url: >
 method: GET
 
 headers:
-  - Authorization: Bearer {{ .Token }}
-  - Accept: application/json
+  Authorization: Bearer {{ .Token }}
+  Accept: application/json
 
 body: >
 {

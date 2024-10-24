@@ -55,7 +55,7 @@ var (
 					return err
 				}
 				logger.
-					WithField("path", config.DefaultTemplatesDirectory).
+					WithField("path", config.DefaultVarFile).
 					Info("initialized default variables file")
 			} else if err != nil {
 				return err

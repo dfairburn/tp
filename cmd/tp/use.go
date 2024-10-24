@@ -2,12 +2,17 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
+	"log"
 	"os"
+	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/dfairburn/tp/config"
 	"github.com/dfairburn/tp/handlers"
 	"github.com/dfairburn/tp/paths"
+	"github.com/dfairburn/tp/static"
 	"github.com/spf13/cobra"
 )
 
@@ -33,16 +38,19 @@ var (
 			var template string
 
 			if len(args) == 1 {
-				if isAbsolutePath(args[0]) {
+				if filepath.IsAbs(args[0]) {
 					template = args[0]
 				}
 
-				absolute := NewAbsoluteFromRelative(c.TemplatesDirectoryPath, args[0])
+				absolute, err := NewAbsoluteFromRelative(c.TemplatesDirectoryPath, args[0])
+				if err != nil {
+					return err
+				}
 				template = absolute
 			}
 
 			if len(args) < 1 {
-				re, err := regexp.Compile(".*\\.tmpl$")
+				re, err := regexp.Compile(static.YamlRegex)
 				if err != nil {
 					return err
 				}
@@ -102,7 +110,7 @@ var (
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
 			var templates []string
-			re, err := regexp.Compile(".*\\.tmpl$")
+			re, err := regexp.Compile(static.YamlRegex)
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
@@ -148,7 +156,7 @@ type FilePath struct {
 
 func NewFilePath(path string, tmpDir string) (FilePath, error) {
 	expanded := paths.Expand(tmpDir)
-	re := regexp.MustCompile(fmt.Sprintf("(?:%s/)(?P<filename>[a-zA-Z\\/\\_]+)(?:.tmpl)", expanded))
+	re := regexp.MustCompile(fmt.Sprintf("(?:%s/)(?P<filename>[a-zA-Z\\/\\_]+)(?:.yml|.yaml)", expanded))
 	matches := re.FindStringSubmatch(path)
 	keys := re.SubexpNames()
 	m := make(map[string]string)
@@ -166,18 +174,35 @@ func NewFilePath(path string, tmpDir string) (FilePath, error) {
 	}, nil
 }
 
-func NewAbsoluteFromRelative(tmpDir string, p string) string {
-	re := regexp.MustCompile(".*\\.tmpl$")
-	if re.Match([]byte(p)) {
-		return fmt.Sprintf("%s/%s", tmpDir, p)
-	} else {
-		return fmt.Sprintf("%s/%s.tmpl", tmpDir, p)
-	}
-}
+func NewAbsoluteFromRelative(templateDir string, p string) (string, error) {
+	var absolute string
 
-func isAbsolutePath(path string) bool {
-	re := regexp.MustCompile("^\\/")
-	return re.Match([]byte(path))
+	fileSystem := os.DirFS(templateDir)
+	err := fs.WalkDir(fileSystem, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		absPathWithExt := fmt.Sprintf("%s/%s", templateDir, path)
+		absPathWithoutExt := fmt.Sprintf("%s/%s", templateDir, strings.TrimSuffix(path, filepath.Ext(path)))
+		relativeWithoutExt := strings.TrimSuffix(path, filepath.Ext(path))
+		if !filepath.IsAbs(p) {
+			p = fmt.Sprintf("%s/%s", templateDir, p)
+		}
+
+		switch p {
+		case absPathWithExt, absPathWithoutExt, path, relativeWithoutExt:
+			abs := path
+			if !filepath.IsAbs(path) {
+				abs = fmt.Sprintf("%s/%s", templateDir, path)
+			}
+
+			absolute = abs
+		}
+		return nil
+	})
+
+	return absolute, err
 }
 
 func init() {

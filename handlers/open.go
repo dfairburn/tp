@@ -7,20 +7,14 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/dfairburn/tp/static"
 	logging "github.com/sirupsen/logrus"
 
 	tppaths "github.com/dfairburn/tp/paths"
 )
 
 const (
-	editor       = "EDITOR"
-	baseTemplate = `===Url
-
-===Method
-
-===Headers
-
-===Body`
+	editor = "EDITOR"
 )
 
 func Open(logger *logging.Logger, templateDir, template string) error {
@@ -41,12 +35,12 @@ func Open(logger *logging.Logger, templateDir, template string) error {
 		return err
 	}
 
-	if filepath.Ext(file) != ".tmpl" || filepath.Ext(file) == "" {
-		path = path + ".tmpl"
+	if filepath.Ext(file) != ".yml" || filepath.Ext(file) != ".yaml" || filepath.Ext(file) == "" {
+		path = path + ".yml"
 	}
 
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		err = os.WriteFile(path, []byte(baseTemplate), 0644)
+		err = os.WriteFile(path, static.DefaultTemplate, 0644)
 		if err != nil {
 			return err
 		}

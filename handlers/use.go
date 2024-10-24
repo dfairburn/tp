@@ -4,51 +4,51 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	httpurl "net/url"
 	"os"
-	"regexp"
 	"strings"
 	"text/template"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/dfairburn/tp/config"
 
 	logging "github.com/sirupsen/logrus"
 )
 
-const (
-	urlKey     = "===Url"
-	url        = "url"
-	methodKey  = "===Method"
-	method     = "method"
-	headersKey = "===Headers"
-	headers    = "headers"
-	bodyKey    = "===Body"
-	body       = "body"
-)
-
-var (
-	keys = []string{methodKey, urlKey, headersKey, bodyKey}
-)
+type Template struct {
+	Url     string            `yaml:"url"`
+	Method  string            `yaml:"method"`
+	Headers map[string]string `yaml:"headers"`
+	Body    string            `yaml:"body"`
+}
 
 // Use gets a filepath and "uses" that template
 func Use(logger *logging.Logger, templateFile string, vars map[interface{}]interface{}, overrides config.Overrides) error {
-	tp := template.Must(template.ParseFiles(templateFile))
+	_, err := os.Stat(templateFile)
+	if err != nil {
+		return err
+	}
+
+	tp := template.Must(template.ParseFiles(templateFile)) // .Option("missingkey=error")
 	overridden := Override(vars, overrides)
 
 	var buf bytes.Buffer
-	err := tp.Execute(&buf, overridden)
+	err = tp.Execute(&buf, overridden)
 	if err != nil {
 		return err
 	}
 
 	if len(buf.Bytes()) < 1 {
-		return errors.New("template not executed, missing variables")
+		return errors.New("unexpected 0 length from executing template")
 	}
 
-	req, err := NewRequest(buf)
+	tmp := &Template{}
+	err = yaml.Unmarshal(buf.Bytes(), tmp)
+
+	req, err := NewRequest(tmp)
 	if err != nil {
 		return err
 	}
@@ -93,24 +93,19 @@ type Request struct {
 	Url     *httpurl.URL
 }
 
-func NewRequest(b bytes.Buffer) (*Request, error) {
-	r := &Request{
-		Headers: make(map[string]string),
+func NewRequest(tmp *Template) (*Request, error) {
+	strippedBody := strings.TrimSpace(tmp.Body)
+	strippedURL := strings.TrimSpace(tmp.Url)
+	u, err := httpurl.Parse(strippedURL)
+	if err != nil {
+		return nil, err
 	}
 
-	// get data for each section
-	for _, key := range keys {
-		sub := strings.Split(b.String(), key)
-		if len(sub) < 2 {
-			continue
-		}
-		k := toKey(key)
-		v := findNextSection(sub[1])[0]
-
-		err := buildRequest(r, k, v)
-		if err != nil {
-			return nil, err
-		}
+	r := &Request{
+		Url:     u,
+		Method:  tmp.Method,
+		Headers: tmp.Headers,
+		Body:    strippedBody,
 	}
 
 	return r, nil
@@ -128,60 +123,6 @@ func (r Request) toHttp() (*http.Request, error) {
 	}
 
 	return req, nil
-}
-
-func buildRequest(r *Request, k string, v string) error {
-	switch k {
-	case url:
-		trim(&v)
-		parsed, err := httpurl.Parse(v)
-		if err != nil {
-			return fmt.Errorf("cannot parse %s as a url: %w", v, err)
-		}
-		r.Url = parsed
-	case method:
-		trim(&v)
-		r.Method = v
-	case headers:
-		h := strings.Split(v, "\n")
-		for _, header := range h {
-			if len(header) == 0 {
-				continue
-			}
-
-			// TODO: Add some error handling
-			parts := strings.Split(header, ":")
-			if len(parts) < 2 {
-				continue
-			}
-
-			key, val := parts[0], parts[1]
-			trim(&key, &val)
-			r.Headers[key] = val
-		}
-	case body:
-		if strings.TrimSpace(v) != "" {
-			r.Body = v
-		}
-	}
-
-	return nil
-}
-
-func trim(s ...*string) {
-	for _, str := range s {
-		newStr := strings.TrimSpace(*str)
-		*str = newStr
-	}
-}
-
-func findNextSection(s string) []string {
-	return strings.Split(s, "===")
-}
-
-func toKey(s string) string {
-	nonAlphaRegex := regexp.MustCompile(`[^a-zA-Z]+`)
-	return strings.ToLower(nonAlphaRegex.ReplaceAllString(s, ""))
 }
 
 func Override(vars map[interface{}]interface{}, overrides config.Overrides) any {

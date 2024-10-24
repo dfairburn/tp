@@ -32,4 +32,4 @@ Hackday - 26/04/2024
     but not great when we want to add stuff... Maybe we can regenerate templates each time we call `tp open` or something?
     UPDATE: This is actually possible, and the `tp completion {bash|fish|zsh|powershell}` command will pick up completions
     for override flags.
-[ ] Autocomplete template files for use command
+[X] Autocomplete template files for use command

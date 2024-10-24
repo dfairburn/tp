@@ -5,6 +5,9 @@ import (
 )
 
 //go:embed template.yml
-var BaseTemplate []byte
+var DefaultTemplate []byte
+
+//go:embed config.yml
+var DefaultConfig []byte
 
 const YamlRegex = "(?:.*\\.yaml$|.*\\.yml$)"

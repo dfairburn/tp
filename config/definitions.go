@@ -1,6 +1,10 @@
 package config
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/dfairburn/tp/paths"
+)
 
 const (
 	ConfigDir      = "config/"
@@ -17,10 +21,14 @@ const (
 	HomeLoc = "~/.tp/"
 	RelLoc  = "./tp/"
 	HereLoc = "./"
+)
 
-	DefaultLogFile    = HomeLoc + LogFilename
-	DefaultConfigFile = HomeLoc + ConfigFilename + YamlExt
-	DefaultVarFile    = HomeLoc + VarFilename + YamlExt
+var (
+	DefaultTemplatesDirectory = paths.Expand(HomeLoc + "templates")
+	DefaultDirectory          = paths.Expand(HomeLoc)
+	DefaultLogFile            = paths.Expand(HomeLoc + LogFilename)
+	DefaultConfigFile         = paths.Expand(HomeLoc + ConfigFilename + YmlExt)
+	DefaultVarFile            = paths.Expand(HomeLoc + VarFilename + YmlExt)
 )
 
 type pathRepo struct {

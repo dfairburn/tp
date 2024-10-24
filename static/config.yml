@@ -1,2 +1,2 @@
-  variableDefinitionFile: "~/.tp/vars.yaml"
+  variableDefinitionFile: "~/.tp/vars.yml"
   templatesDirectoryPath: "~/.tp/templates"

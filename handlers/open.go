@@ -40,7 +40,7 @@ func Open(logger *logging.Logger, templateDir, template string) error {
 	}
 
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		err = os.WriteFile(path, static.BaseTemplate, 0644)
+		err = os.WriteFile(path, static.DefaultTemplate, 0644)
 		if err != nil {
 			return err
 		}

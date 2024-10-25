@@ -38,15 +38,14 @@ var (
 			var template string
 
 			if len(args) == 1 {
-				if filepath.IsAbs(args[0]) {
-					template = args[0]
+				template = args[0]
+				if !filepath.IsAbs(args[0]) {
+					path, err := paths.NewAbsoluteFromRelative(template, c.TemplatesDirectoryPath)
+					if err != nil {
+						return err
+					}
+					template = path
 				}
-
-				absolute, err := NewAbsoluteFromRelative(c.TemplatesDirectoryPath, args[0])
-				if err != nil {
-					return err
-				}
-				template = absolute
 			}
 
 			if len(args) < 1 {

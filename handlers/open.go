@@ -2,14 +2,10 @@ package handlers
 
 import (
 	"errors"
-	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-
 	"github.com/dfairburn/tp/static"
 	logging "github.com/sirupsen/logrus"
+	"os"
+	"os/exec"
 
 	tppaths "github.com/dfairburn/tp/paths"
 )
@@ -19,33 +15,9 @@ const (
 )
 
 func Open(logger *logging.Logger, templateDir, template string) error {
-	expanded := tppaths.Expand(templateDir)
-	d, err := os.Stat(expanded)
+	path, err := tppaths.NewAbsoluteFromRelative(template, templateDir)
 	if err != nil {
 		return err
-	}
-
-	if !d.IsDir() {
-		return fmt.Errorf("configured templates dir %s is not a directory", expanded)
-	}
-
-	var path = template
-	if !filepath.IsAbs(template) {
-		path = filepath.Join(expanded, template)
-	}
-
-	dir, _ := filepath.Split(path)
-	err = os.MkdirAll(dir, 0755)
-	if err != nil && !os.IsExist(err) {
-		return err
-	}
-
-	if filepath.Ext(path) == ".yaml" {
-		path = strings.TrimSuffix(path, ".yaml") + ".yml"
-	}
-
-	if filepath.Ext(path) == "" {
-		path = path + ".yml"
 	}
 
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {

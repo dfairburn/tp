@@ -47,6 +47,40 @@ func Expand(p string) string {
 	return p
 }
 
+func NewAbsoluteFromRelative(template, dir string) (string, error) {
+	var path string
+	expanded := Expand(dir)
+	d, err := os.Stat(expanded)
+	if err != nil {
+		return path, err
+	}
+
+	if !d.IsDir() {
+		return path, fmt.Errorf("configured templates dir %s is not a directory", expanded)
+	}
+
+	path = template
+	if !filepath.IsAbs(template) {
+		path = filepath.Join(expanded, template)
+	}
+
+	pathDir, _ := filepath.Split(path)
+	err = os.MkdirAll(pathDir, 0755)
+	if err != nil && !os.IsExist(err) {
+		return path, err
+	}
+
+	if filepath.Ext(path) == ".yaml" {
+		path = strings.TrimSuffix(path, ".yaml") + ".yml"
+	}
+
+	if filepath.Ext(path) == "" {
+		path = path + ".yml"
+	}
+
+	return path, nil
+}
+
 func expandTilde(p string) string {
 	return expand("~/", "$HOME", p)
 }

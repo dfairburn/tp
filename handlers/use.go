@@ -47,6 +47,9 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 
 	tmp := &Template{}
 	err = yaml.Unmarshal(buf.Bytes(), tmp)
+	if err != nil {
+		return err
+	}
 
 	req, err := NewRequest(tmp)
 	if err != nil {

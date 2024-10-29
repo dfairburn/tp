@@ -115,10 +115,31 @@ func NewRequest(tmp *Template) (*Request, error) {
 }
 
 func (r Request) toHttp() (*http.Request, error) {
-	reqBody := bytes.NewBufferString(r.Body)
-	req, err := http.NewRequestWithContext(context.Background(), r.Method, r.Url.String(), reqBody)
-	if err != nil {
-		return nil, err
+	var req *http.Request
+
+	switch r.Headers["Content-Type"] {
+	case "application/x-www-form-urlencoded":
+		data := httpurl.Values{}
+		for _, d := range strings.Split(r.Body, " ") {
+			values := strings.Split(d, "=")
+			if len(values) != 2 {
+				return nil, errors.New("expected key and value in form body")
+			}
+
+			data.Set(values[0], values[1])
+		}
+		formReq, err := http.NewRequestWithContext(context.Background(), r.Method, r.Url.String(), strings.NewReader(data.Encode()))
+		if err != nil {
+			return nil, err
+		}
+		req = formReq
+	default:
+		reqBody := bytes.NewBufferString(r.Body)
+		jsonReq, err := http.NewRequestWithContext(context.Background(), r.Method, r.Url.String(), reqBody)
+		if err != nil {
+			return nil, err
+		}
+		req = jsonReq
 	}
 
 	for k, v := range r.Headers {

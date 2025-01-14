@@ -104,6 +104,9 @@ func NewRequest(tmp *Template) (*Request, error) {
 		return nil, err
 	}
 
+	q := u.Query()
+	u.RawQuery = q.Encode()
+
 	r := &Request{
 		Url:     u,
 		Method:  tmp.Method,

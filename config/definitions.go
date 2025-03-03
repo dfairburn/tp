@@ -12,11 +12,11 @@ const (
 
 	YamlExt = ".yaml"
 	YmlExt  = ".yml"
+	EnvExt  = ".env"
 
 	LogFilename = "tp.log"
 
-	VarDir      = "vars/"
-	VarFilename = "vars"
+	DefaultEnvFilename = "default" + EnvExt
 
 	HomeLoc = "~/.tp/"
 	RelLoc  = "./tp/"
@@ -28,7 +28,8 @@ var (
 	DefaultDirectory          = paths.Expand(HomeLoc)
 	DefaultLogFile            = paths.Expand(HomeLoc + LogFilename)
 	DefaultConfigFile         = paths.Expand(HomeLoc + ConfigFilename + YmlExt)
-	DefaultVarFile            = paths.Expand(HomeLoc + VarFilename + YmlExt)
+	DefaultEnvPath            = paths.Expand(HomeLoc + DefaultEnvFilename + YmlExt)
+	DefaultEnv                = "default"
 )
 
 type pathRepo struct {
@@ -59,23 +60,23 @@ func buildConfigPaths() pathRepo {
 	return p
 }
 
-func buildVarPaths() pathRepo {
+func buildEnvPaths() pathRepo {
 	p := pathRepo{}
 
-	p.add(HomeLoc, VarDir, VarFilename, YamlExt)
-	p.add(HomeLoc, VarDir, VarFilename, YmlExt)
+	p.add(HomeLoc, DefaultEnvFilename, YamlExt)
+	p.add(HomeLoc, DefaultEnvFilename, YmlExt)
 
-	p.add(HomeLoc, VarFilename, YamlExt)
-	p.add(HomeLoc, VarFilename, YmlExt)
+	p.add(HomeLoc, YamlExt)
+	p.add(HomeLoc, YmlExt)
 
-	p.add(RelLoc, VarDir, VarFilename, YamlExt)
-	p.add(RelLoc, VarDir, VarFilename, YmlExt)
+	p.add(RelLoc, DefaultEnvFilename, YamlExt)
+	p.add(RelLoc, DefaultEnvFilename, YmlExt)
 
-	p.add(RelLoc, VarFilename, YamlExt)
-	p.add(RelLoc, VarFilename, YmlExt)
+	p.add(RelLoc, DefaultEnvFilename, YamlExt)
+	p.add(RelLoc, DefaultEnvFilename, YmlExt)
 
-	p.add(HereLoc, VarFilename, YamlExt)
-	p.add(HereLoc, VarFilename, YmlExt)
+	p.add(HereLoc, DefaultEnvFilename, YamlExt)
+	p.add(HereLoc, DefaultEnvFilename, YmlExt)
 
 	return p
 }

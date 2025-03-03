@@ -48,14 +48,14 @@ var (
 				WithField("path", config.DefaultTemplatesDirectory).
 				Info("initialized default templates directory")
 
-			if _, err := os.Stat(config.DefaultVarFile); err != nil && os.IsNotExist(err) {
-				f, err := os.Create(config.DefaultVarFile)
+			if _, err := os.Stat(config.DefaultEnvPath); err != nil && os.IsNotExist(err) {
+				f, err := os.Create(config.DefaultEnvPath)
 				defer f.Close()
 				if err != nil {
 					return err
 				}
 				logger.
-					WithField("path", config.DefaultVarFile).
+					WithField("path", config.DefaultEnvPath).
 					Info("initialized default variables file")
 			} else if err != nil {
 				return err

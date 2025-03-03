@@ -4,3 +4,4 @@ bin
 vars.yaml
 templates
 dist/
+internal/insomnia/fixtures

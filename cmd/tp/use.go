@@ -95,7 +95,7 @@ var (
 			}
 
 			var vars map[interface{}]interface{}
-			_, vars = config.LoadVars(logger, varsFile, c.VariableDefinitionFile)
+			_, vars = config.LoadEnvironment(logger, envFile, c.EnvironmentFile)
 
 			o, err := config.ValidateOverrides(overrides, logger)
 			if err != nil {
@@ -207,7 +207,7 @@ func NewAbsoluteFromRelative(templateDir string, p string) (string, error) {
 func init() {
 	useCmd.Flags().StringSliceVarP(&overrides, overrideFlagName, "o", []string{}, overrideUsage)
 	err := useCmd.RegisterFlagCompletionFunc(overrideFlagName, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		_, varMap := config.LoadVars(logger, varsFile, c.VariableDefinitionFile)
+		_, varMap := config.LoadEnvironment(logger, envFile, c.EnvironmentFile)
 		var vars []string
 		for key, _ := range varMap {
 			s := key.(string)

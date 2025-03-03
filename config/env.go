@@ -14,11 +14,11 @@ import (
 	logging "github.com/sirupsen/logrus"
 )
 
-func LoadVars(logger *logging.Logger, paths ...string) (string, map[interface{}]interface{}) {
+func LoadEnvironment(logger *logging.Logger, paths ...string) (string, map[interface{}]interface{}) {
 	y := make(map[interface{}]interface{})
 
 	// this gives precedent to paths passed in via config and flags, then processes the default file paths
-	paths = append(paths, buildVarPaths().paths...)
+	paths = append(paths, buildEnvPaths().paths...)
 
 	f, path, err := tryFiles(logger, paths...)
 	if err != nil {

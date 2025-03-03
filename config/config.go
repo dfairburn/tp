@@ -38,7 +38,7 @@ func loadConfig(f *os.File) (Config, error) {
 
 type Config struct {
 	// File defining defaults for variables
-	VariableDefinitionFile string `yaml:"variableDefinitionFile"`
+	EnvironmentFile        string `yaml:"environmentFile"`
 	TemplatesDirectoryPath string `yaml:"templatesDirectoryPath"`
 }
 

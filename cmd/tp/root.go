@@ -19,11 +19,11 @@ var (
 	// global flags
 	c          config.Config
 	configPath string
-	varsPath   string
 	logger     = logging.New()
 	cfgFile    string
 	logFile    string
-	varsFile   string
+	env        string
+	envFile    string
 	debug      bool
 	rootCmd    = &cobra.Command{
 		Use:   "tp",
@@ -40,12 +40,19 @@ func Execute() error {
 }
 
 func init() {
-	cobra.OnInitialize(initLogger, initConfig)
+	cobra.OnInitialize(initLogger, initConfig, initEnv)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", config.DefaultConfigFile, "yaml file containing config")
-	rootCmd.PersistentFlags().StringVar(&varsFile, "vars", config.DefaultVarFile, "yaml file containing variable definitions")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", config.DefaultConfigFile, "yaml file containing config")
+	rootCmd.PersistentFlags().StringVar(&envFile, "envFile", config.DefaultEnvPath, "yaml file containing variable definitions")
+	rootCmd.PersistentFlags().StringVarP(&env, "env", "e", config.DefaultEnv, "a string dictating which env file to use")
 	rootCmd.PersistentFlags().StringVar(&logFile, "log", config.DefaultLogFile, "destination of log file")
-	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "whether to print debug to stdout")
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "whether to print debug to stdout")
+}
+
+func initEnv() {
+	if env != "" {
+		envFile = paths.Expand(config.HomeLoc + env + config.YmlExt)
+	}
 }
 
 func initConfig() {
@@ -56,10 +63,10 @@ func initConfig() {
 
 	configPath = path
 	expandedTemplateDirPath := paths.Expand(cfg.TemplatesDirectoryPath)
-	expandedVariablePath := paths.Expand(cfg.VariableDefinitionFile)
+	expandedEnvironmentFilePath := paths.Expand(cfg.EnvironmentFile)
 
 	c = config.Config{
-		VariableDefinitionFile: expandedVariablePath,
+		EnvironmentFile:        expandedEnvironmentFilePath,
 		TemplatesDirectoryPath: expandedTemplateDirPath,
 	}
 }

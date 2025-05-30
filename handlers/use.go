@@ -15,6 +15,8 @@ import (
 
 	"github.com/dfairburn/tp/config"
 
+	"github.com/tidwall/pretty"
+
 	logging "github.com/sirupsen/logrus"
 )
 
@@ -80,6 +82,17 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 		return err
 	}
 	logger.Println(resp)
+
+	ct := resp.Header.Get(http.CanonicalHeaderKey("Content-Type"))
+	if strings.Contains(ct, "application/json") {
+		// pretty-print json output
+		respBody = pretty.Pretty(respBody)
+		o, _ := os.Stdout.Stat()
+		if (o.Mode() & os.ModeCharDevice) == os.ModeCharDevice {
+			// colorize when Stdout is a terminal
+			respBody = pretty.Color(respBody, nil)
+		}
+	}
 	_, err = io.WriteString(os.Stdout, string(respBody))
 	if err != nil {
 		logger.Println(err)

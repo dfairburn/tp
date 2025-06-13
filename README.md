@@ -211,6 +211,7 @@ Flags:
 | Short | Long        | Description                                                                    |
 |-------|-------------|--------------------------------------------------------------------------------|
 | -o    | --overrides | A list of variable overrides, either comma-separated or by repeating the flag. |
+|       | --raw       | Outputs the raw result of the request without formatting                       |
 | -h    | --help      | Displays the help text for the `use` command.                                  |
 
 Example `-o` usage:

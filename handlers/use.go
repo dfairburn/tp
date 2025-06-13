@@ -28,7 +28,7 @@ type Template struct {
 }
 
 // Use gets a filepath and "uses" that template
-func Use(logger *logging.Logger, templateFile string, vars map[interface{}]interface{}, overrides config.Overrides) error {
+func Use(logger *logging.Logger, templateFile string, vars map[interface{}]interface{}, overrides config.Overrides, rawOutput bool) error {
 	_, err := os.Stat(templateFile)
 	if err != nil {
 		return err
@@ -84,15 +84,10 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 	logger.Println(resp)
 
 	ct := resp.Header.Get(http.CanonicalHeaderKey("Content-Type"))
-	if strings.Contains(ct, "application/json") {
-		// pretty-print json output
-		respBody = pretty.Pretty(respBody)
-		o, _ := os.Stdout.Stat()
-		if (o.Mode() & os.ModeCharDevice) == os.ModeCharDevice {
-			// colorize when Stdout is a terminal
-			respBody = pretty.Color(respBody, nil)
-		}
+	if strings.Contains(ct, "application/json") && !rawOutput {
+		respBody = formatResponse(respBody)
 	}
+
 	_, err = io.WriteString(os.Stdout, string(respBody))
 	if err != nil {
 		logger.Println(err)
@@ -175,4 +170,15 @@ func Override(vars map[interface{}]interface{}, overrides config.Overrides) any 
 	}
 
 	return vars
+}
+
+func formatResponse(respBody []byte) []byte {
+	// pretty-print json output
+	body := pretty.Pretty(respBody)
+	o, _ := os.Stdout.Stat()
+	if (o.Mode() & os.ModeCharDevice) == os.ModeCharDevice {
+		// colorize when Stdout is a terminal
+		body = pretty.Color(body, nil)
+	}
+	return body
 }

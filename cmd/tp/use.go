@@ -22,6 +22,8 @@ var (
 	// TODO: --help show all available overrides
 	overrides       []string
 	loadedOverrides []string
+	rawOutput       = false
+	rawUsage        = "Outputs the raw result of the request without formatting.\n"
 	overrideUsage   = "A comma separated list of variable overrides.\n" +
 		"A variable override is a list of strings in the following format:\n" +
 		"The of the name of the variable, followed by a colon, followed by the override value, e.g:\n" +
@@ -102,7 +104,7 @@ var (
 				logger.Fatalf("cannot use overrides due to errors: %v", err)
 			}
 
-			return handlers.Use(logger, template, vars, o)
+			return handlers.Use(logger, template, vars, o, rawOutput)
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
@@ -206,6 +208,7 @@ func NewAbsoluteFromRelative(templateDir string, p string) (string, error) {
 
 func init() {
 	useCmd.Flags().StringSliceVarP(&overrides, overrideFlagName, "o", []string{}, overrideUsage)
+	useCmd.Flags().BoolVar(&rawOutput, "raw", false, rawUsage)
 	err := useCmd.RegisterFlagCompletionFunc(overrideFlagName, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		_, varMap := config.LoadEnvironment(logger, envFile, c.EnvironmentFile)
 		var vars []string

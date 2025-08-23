@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	httpurl "net/url"
 	"os"
+	"path"
 	"strings"
 	"text/template"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -34,11 +37,18 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 		return err
 	}
 
-	tp := template.Must(template.ParseFiles(templateFile)) // .Option("missingkey=error")
+	templateName := path.Base(templateFile)
+
+	tmpl, err := template.New(templateName).
+		Funcs(templateFuncs(logger)).
+		ParseFiles(templateFile)
+	if err != nil {
+		return err
+	}
 	overridden := Override(vars, overrides)
 
 	var buf bytes.Buffer
-	err = tp.Execute(&buf, overridden)
+	err = tmpl.ExecuteTemplate(&buf, templateName, overridden)
 	if err != nil {
 		return err
 	}
@@ -181,4 +191,44 @@ func formatResponse(respBody []byte) []byte {
 		body = pretty.Color(body, nil)
 	}
 	return body
+}
+
+func templateFuncs(logger *logging.Logger) template.FuncMap {
+	return template.FuncMap{
+		"default": func(value string, defaultValue string) string {
+			if value == "" {
+				return defaultValue
+			}
+			return value
+		},
+		"optional": func(format string, value any) string {
+			str, ok := value.(string)
+			if !ok || str == "" {
+				return ""
+			}
+			return fmt.Sprintf(format, value)
+		},
+		"timestamp": func(value any) string {
+			str, ok := value.(string)
+			if !ok || str == "" {
+				// user chose to leave this empty
+				return ""
+			}
+			if _, err := time.Parse(time.RFC3339, str); err == nil {
+				// user provided a timestamp, just use it
+				return str
+			}
+			if str == "now" {
+				// now is a special keyword for the current time
+				return time.Now().UTC().Format(time.RFC3339)
+			}
+			if dur, err := time.ParseDuration(str); err == nil {
+				// a duration string relative to now
+				return time.Now().Add(dur).Format(time.RFC3339)
+			}
+
+			logger.Warnf("template function 'timestamp' received unexpected value: %v", value)
+			return ""
+		},
+	}
 }

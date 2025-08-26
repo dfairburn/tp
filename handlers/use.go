@@ -14,9 +14,8 @@ import (
 	"text/template"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/dfairburn/tp/config"
+	"gopkg.in/yaml.v3"
 
 	"github.com/tidwall/pretty"
 
@@ -24,10 +23,11 @@ import (
 )
 
 type Template struct {
-	Url     string            `yaml:"url"`
-	Method  string            `yaml:"method"`
-	Headers map[string]string `yaml:"headers"`
-	Body    string            `yaml:"body"`
+	Descriptions map[string]string `yaml:"descriptions"`
+	Url          string            `yaml:"url"`
+	Method       string            `yaml:"method"`
+	Headers      map[string]string `yaml:"headers"`
+	Body         string            `yaml:"body"`
 }
 
 // Use gets a filepath and "uses" that template
@@ -53,7 +53,7 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 		return err
 	}
 
-	if len(buf.Bytes()) < 1 {
+	if buf.Len() < 1 {
 		return errors.New("unexpected 0 length from executing template")
 	}
 
@@ -195,11 +195,11 @@ func formatResponse(respBody []byte) []byte {
 
 func templateFuncs(logger *logging.Logger) template.FuncMap {
 	return template.FuncMap{
-		"default": func(value string, defaultValue string) string {
-			if value == "" {
+		"default": func(value any, defaultValue string) string {
+			if value == nil {
 				return defaultValue
 			}
-			return value
+			return fmt.Sprintf("%s", value)
 		},
 		"optional": func(format string, value any) string {
 			str, ok := value.(string)

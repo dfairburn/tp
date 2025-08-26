@@ -2,11 +2,12 @@ package main
 
 import (
 	"errors"
-	"github.com/ktr0731/go-fuzzyfinder"
 	"io"
 	"log"
 	"os"
 	"time"
+
+	"github.com/ktr0731/go-fuzzyfinder"
 
 	"github.com/dfairburn/tp/config"
 	"github.com/dfairburn/tp/paths"
@@ -41,7 +42,6 @@ func Execute() error {
 
 func init() {
 	cobra.OnInitialize(initLogger, initConfig, initEnv)
-
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", config.DefaultConfigFile, "yaml file containing config")
 	rootCmd.PersistentFlags().StringVar(&envFile, "envFile", config.DefaultEnvPath, "yaml file containing variable definitions")
 	rootCmd.PersistentFlags().StringVarP(&env, "env", "e", config.DefaultEnv, "a string dictating which env file to use")

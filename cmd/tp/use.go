@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -102,7 +103,16 @@ var (
 				logger.Fatalf("cannot use overrides due to errors: %v", err)
 			}
 
-			return handlers.Use(logger, template, vars, o, rawOutput)
+			var usageErr handlers.UsageError
+			err = handlers.Use(logger, template, vars, o, rawOutput)
+			if err != nil && errors.As(err, &usageErr) {
+				fmt.Println()
+				fmt.Println(err)
+				fmt.Println()
+				printTemplateHelp(cmd, args)
+				return nil
+			}
+			return err
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
@@ -197,40 +207,43 @@ func init() {
 		initConfig()
 		initEnv()
 
-		filteredArgs := slices.DeleteFunc(args, func(s string) bool {
-			return s == "use"
-		})
-
-		path, err := paths.NewAbsoluteFromRelative(filteredArgs[0], c.TemplatesDirectoryPath)
-		if err != nil && !os.IsNotExist(err) {
-			logger.WithError(err).Panic("generating template path")
-		}
-
-		_, err = os.Stat(path)
-		if err != nil && os.IsNotExist(err) {
-			// this template does not exist, show standard usage
-			fmt.Println(cmd.UsageString())
-			os.Exit(0)
-		} else if err != nil {
-			logger.WithError(err).Panic("checking template file")
-		}
-
-		content, err := os.ReadFile(path)
-		if err != nil {
-			logger.WithError(err).Panic("reading template file")
-		}
-
-		tmplUsageBlock, err := handlers.GenerateTemplateUsage(content)
-		if err != nil {
-			logger.WithError(err).Panic("failure generating template usage")
-		}
-
-		fmt.Println(cmd.Short)
-		fmt.Println("")
-		fmt.Println("Template Parameters:")
-		fmt.Println(tmplUsageBlock)
-		fmt.Println(cmd.UsageString())
-
+		printTemplateHelp(cmd, args)
 	})
 	rootCmd.AddCommand(useCmd)
+}
+
+func printTemplateHelp(cmd *cobra.Command, args []string) {
+	filteredArgs := slices.DeleteFunc(args, func(s string) bool {
+		return s == "use"
+	})
+
+	path, err := paths.NewAbsoluteFromRelative(filteredArgs[0], c.TemplatesDirectoryPath)
+	if err != nil && !os.IsNotExist(err) {
+		logger.WithError(err).Panic("generating template path")
+	}
+
+	_, err = os.Stat(path)
+	if err != nil && os.IsNotExist(err) {
+		// this template does not exist, show standard usage
+		fmt.Println(cmd.UsageString())
+		os.Exit(0)
+	} else if err != nil {
+		logger.WithError(err).Panic("checking template file")
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		logger.WithError(err).Panic("reading template file")
+	}
+
+	tmplUsageBlock, err := handlers.GenerateTemplateUsage(content)
+	if err != nil {
+		logger.WithError(err).Panic("failure generating template usage")
+	}
+
+	fmt.Println(cmd.Short)
+	fmt.Println("")
+	fmt.Println("Template Parameters:")
+	fmt.Println(tmplUsageBlock)
+	fmt.Println(cmd.UsageString())
 }

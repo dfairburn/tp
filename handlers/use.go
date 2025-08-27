@@ -22,6 +22,8 @@ import (
 	logging "github.com/sirupsen/logrus"
 )
 
+type UsageError error
+
 type Template struct {
 	Descriptions map[string]string `yaml:"descriptions"`
 	Url          string            `yaml:"url"`
@@ -36,16 +38,36 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 	if err != nil {
 		return err
 	}
+	overridden := Override(vars, overrides)
+	content, err := os.ReadFile(templateFile)
+	if err != nil {
+		return fmt.Errorf("reading template file: %w", err)
+	}
+	varUses, err := ParseUsages(content)
+	if err != nil {
+		return err
+	}
+
+	for _, use := range varUses {
+		_, hasValue := overridden[use.Name()]
+		switch use.(type) {
+		case VarUsage, TimestampUsage:
+			if !hasValue {
+				return UsageError(fmt.Errorf("missing required variable: %s", use.Name()))
+			}
+		case DefaultUsage, OptionalUsage:
+			// these tolerate missing values
+			// no error here
+		}
+	}
 
 	templateName := path.Base(templateFile)
-
 	tmpl, err := template.New(templateName).
 		Funcs(templateFuncs(logger)).
 		ParseFiles(templateFile)
 	if err != nil {
 		return err
 	}
-	overridden := Override(vars, overrides)
 
 	var buf bytes.Buffer
 	err = tmpl.ExecuteTemplate(&buf, templateName, overridden)
@@ -170,7 +192,7 @@ func (r Request) toHttp() (*http.Request, error) {
 	return req, nil
 }
 
-func Override(vars map[interface{}]interface{}, overrides config.Overrides) any {
+func Override(vars map[interface{}]interface{}, overrides config.Overrides) map[any]any {
 	if len(vars) == 0 {
 		return overrides.ToMap()
 	}

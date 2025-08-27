@@ -7,16 +7,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func GenerateTemplateUsage(content []byte) (string, error) {
+func ParseUsages(content []byte) ([]Usage, error) {
 	usageRegex := regexp.MustCompile(`\{\{([^\}]+)\}\}`)
 	varUsage := regexp.MustCompile(`^\s*\.(\S+)\s*$`)
 	optionalUsage := regexp.MustCompile(`^\s*optional.*\.(\S+)\s*$`)
 	timestampUsage := regexp.MustCompile(`^\s*timestamp\s+\.(\S+)\s*$`)
 	defaultUsage := regexp.MustCompile(`^\s*default\s+\.(\S+)\s+"(\w+)"\s*$`)
-	matches := usageRegex.FindAllStringSubmatch(string(content), -1)
 
 	uses := []Usage{}
-	for _, match := range matches {
+	for _, match := range usageRegex.FindAllStringSubmatch(string(content), -1) {
 		if len(match) != 2 {
 			continue
 		}
@@ -36,9 +35,17 @@ func GenerateTemplateUsage(content []byte) (string, error) {
 			uses = append(uses, DefaultUsage{ref: match[1], defaultVal: match[2]})
 		}
 	}
+	return uses, nil
+}
+
+func GenerateTemplateUsage(content []byte) (string, error) {
+	uses, err := ParseUsages(content)
+	if err != nil {
+		return "", err
+	}
 
 	template := Template{}
-	err := yaml.Unmarshal(content, &template)
+	err = yaml.Unmarshal(content, &template)
 	if err != nil {
 		return "", err
 	}

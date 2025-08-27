@@ -195,7 +195,7 @@ func formatResponse(respBody []byte) []byte {
 
 func templateFuncs(logger *logging.Logger) template.FuncMap {
 	return template.FuncMap{
-		"default": func(value any, defaultValue string) string {
+		"default": func(defaultValue string, value any) string {
 			if value == nil {
 				return defaultValue
 			}

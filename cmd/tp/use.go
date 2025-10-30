@@ -236,7 +236,12 @@ func printTemplateHelp(cmd *cobra.Command, args []string) {
 		logger.WithError(err).Panic("reading template file")
 	}
 
-	tmplUsageBlock, err := handlers.GenerateTemplateUsage(content)
+	escaped, err := handlers.HandleUnquotedUrl(content)
+	if err != nil {
+		logger.WithError(err).Panic("escaping unquoted url")
+	}
+
+	tmplUsageBlock, err := handlers.GenerateTemplateUsage(escaped)
 	if err != nil {
 		logger.WithError(err).Panic("failure generating template usage")
 	}

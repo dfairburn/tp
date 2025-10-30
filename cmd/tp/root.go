@@ -28,8 +28,8 @@ var (
 	debug      bool
 	rootCmd    = &cobra.Command{
 		Use:   "tp",
-		Short: "tp is a configurable api client",
-		Long:  `some text about tp`,
+		Short: "Tp is a configurable api client",
+		Long:  "Tp is a command-line utility to create and re-use templated http requests.\nTp was created as an alternative to GUI based API clients, to allow for easier automation and scripting of api requests.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return errors.New("no subcommand given")
 		},

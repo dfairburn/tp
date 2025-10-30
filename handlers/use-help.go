@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"fmt"
 	"regexp"
 
@@ -56,6 +57,26 @@ func GenerateTemplateUsage(content []byte) (string, error) {
 		result += fmt.Sprintf("  %-15s%-20s%-25s\n", use.Name(), use.Extra(), desc)
 	}
 	return result, nil
+}
+
+func HandleUnquotedUrl(content []byte) ([]byte, error) {
+	urlRegex := regexp.MustCompile(`(?m)^\s*url:\s*".*"$|^\s*url:\s*([^"\n].*)$`)
+
+	modified := urlRegex.ReplaceAllFunc(content, func(match []byte) []byte {
+		submatch := urlRegex.FindSubmatch(match)
+
+		// If submatch[1] is empty, the URL is already quoted
+		if len(submatch) < 2 || len(submatch[1]) == 0 {
+			return match
+		}
+
+		urlValue := string(submatch[1])
+		indentation := string(match[:bytes.IndexByte(match, 'u')])
+
+		return []byte(fmt.Sprintf("%surl: \"%s\"", indentation, urlValue))
+	})
+
+	return modified, nil
 }
 
 type Usage interface {

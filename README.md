@@ -332,6 +332,9 @@ templatesDirectoryPath: "~/.tp/templates"
 tp has the notion of "templates", which are yaml files that hold data to construct HTTP requests. The template structure is as follows:
 
 ```yaml
+# optional descriptions of template vars which will be included in the help output
+descriptions:
+  id: ID of the foo to query 
 # the target url of the HTTP request
 url: 
 # the HTTP method to be used
@@ -375,8 +378,62 @@ body: >
 Variables can be input in two forms, either configuring a variables file<sup>1</sup>, or providing them via command-line
 overrides.
 
-
 <sup>1</sup> Should also consider providing directories for more complex variable layouts. Not sure if this comes free 
 with yaml parsing or not.
+
+
+### Functions
+
+There are a few custom built-in functions provided during template execution to simplify common usage patterns.
+
+
+#### default
+
+Provide a default value to be used when the variable is empty.
+
+The syntax is `default <default-string> <variable>`
+
+Example Usage:
+
+```yaml
+url: http://localhost/query?limit={{default "100" .limit}}
+```
+
+#### optional
+
+Optionally include some content depending on the presence of a value.
+
+The syntax is `optional <fmt-string> <variable>`
+
+Example Usage:
+
+```yaml
+url: http://localhost/query?limit=10{{optional "&filter=%s" .filter}}
+```
+
+#### timestamp
+
+Provides sugar for generating RFC3339 timestamps.
+
+The syntax is `timestamp <variable>`
+
+The passed variable can contain:
+- a valid RFC3339 timestamp which will not be touched
+- the string "now" which will be replaced with the current time
+- a duration string which will be added to the current time
+
+Example Usage in Template:
+
+```yaml
+url: http://localhost/query?start={{timestamp .start}}&end={{timestamp .end}}
+```
+
+Example Usage from CLI:
+```bash
+tp use query -o start:-1h -o end:now
+```
+
+
+
 
 ### Config

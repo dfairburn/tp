@@ -2,11 +2,12 @@ package main
 
 import (
 	"errors"
-	"github.com/ktr0731/go-fuzzyfinder"
 	"io"
 	"log"
 	"os"
 	"time"
+
+	"github.com/ktr0731/go-fuzzyfinder"
 
 	"github.com/dfairburn/tp/config"
 	"github.com/dfairburn/tp/paths"
@@ -27,8 +28,8 @@ var (
 	debug      bool
 	rootCmd    = &cobra.Command{
 		Use:   "tp",
-		Short: "tp is a configurable api client",
-		Long:  `some text about tp`,
+		Short: "Tp is a configurable api client",
+		Long:  "Tp is a command-line utility to create and re-use templated http requests.\nTp was created as an alternative to GUI based API clients, to allow for easier automation and scripting of api requests.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return errors.New("no subcommand given")
 		},
@@ -41,7 +42,6 @@ func Execute() error {
 
 func init() {
 	cobra.OnInitialize(initLogger, initConfig, initEnv)
-
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", config.DefaultConfigFile, "yaml file containing config")
 	rootCmd.PersistentFlags().StringVar(&envFile, "envFile", config.DefaultEnvPath, "yaml file containing variable definitions")
 	rootCmd.PersistentFlags().StringVarP(&env, "env", "e", config.DefaultEnv, "a string dictating which env file to use")

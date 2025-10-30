@@ -4,27 +4,32 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	httpurl "net/url"
 	"os"
+	"path"
 	"strings"
 	"text/template"
-
-	"gopkg.in/yaml.v3"
+	"time"
 
 	"github.com/dfairburn/tp/config"
+	"gopkg.in/yaml.v3"
 
 	"github.com/tidwall/pretty"
 
 	logging "github.com/sirupsen/logrus"
 )
 
+type UsageError error
+
 type Template struct {
-	Url     string            `yaml:"url"`
-	Method  string            `yaml:"method"`
-	Headers map[string]string `yaml:"headers"`
-	Body    string            `yaml:"body"`
+	Descriptions map[string]string `yaml:"descriptions"`
+	Url          string            `yaml:"url"`
+	Method       string            `yaml:"method"`
+	Headers      map[string]string `yaml:"headers"`
+	Body         string            `yaml:"body"`
 }
 
 // Use gets a filepath and "uses" that template
@@ -33,17 +38,44 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 	if err != nil {
 		return err
 	}
-
-	tp := template.Must(template.ParseFiles(templateFile)) // .Option("missingkey=error")
 	overridden := Override(vars, overrides)
-
-	var buf bytes.Buffer
-	err = tp.Execute(&buf, overridden)
+	content, err := os.ReadFile(templateFile)
+	if err != nil {
+		return fmt.Errorf("reading template file: %w", err)
+	}
+	varUses, err := ParseUsages(content)
 	if err != nil {
 		return err
 	}
 
-	if len(buf.Bytes()) < 1 {
+	for _, use := range varUses {
+		_, hasValue := overridden[use.Name()]
+		switch use.(type) {
+		case VarUsage, TimestampUsage:
+			if !hasValue {
+				return UsageError(fmt.Errorf("missing required variable: %s", use.Name()))
+			}
+		case DefaultUsage, OptionalUsage:
+			// these tolerate missing values
+			// no error here
+		}
+	}
+
+	templateName := path.Base(templateFile)
+	tmpl, err := template.New(templateName).
+		Funcs(templateFuncs(logger)).
+		ParseFiles(templateFile)
+	if err != nil {
+		return err
+	}
+
+	var buf bytes.Buffer
+	err = tmpl.ExecuteTemplate(&buf, templateName, overridden)
+	if err != nil {
+		return err
+	}
+
+	if buf.Len() < 1 {
 		return errors.New("unexpected 0 length from executing template")
 	}
 
@@ -160,7 +192,7 @@ func (r Request) toHttp() (*http.Request, error) {
 	return req, nil
 }
 
-func Override(vars map[interface{}]interface{}, overrides config.Overrides) any {
+func Override(vars map[interface{}]interface{}, overrides config.Overrides) map[any]any {
 	if len(vars) == 0 {
 		return overrides.ToMap()
 	}
@@ -181,4 +213,44 @@ func formatResponse(respBody []byte) []byte {
 		body = pretty.Color(body, nil)
 	}
 	return body
+}
+
+func templateFuncs(logger *logging.Logger) template.FuncMap {
+	return template.FuncMap{
+		"default": func(defaultValue string, value any) string {
+			if value == nil {
+				return defaultValue
+			}
+			return fmt.Sprintf("%s", value)
+		},
+		"optional": func(format string, value any) string {
+			str, ok := value.(string)
+			if !ok || str == "" {
+				return ""
+			}
+			return fmt.Sprintf(format, value)
+		},
+		"timestamp": func(value any) string {
+			str, ok := value.(string)
+			if !ok || str == "" {
+				// user chose to leave this empty
+				return ""
+			}
+			if _, err := time.Parse(time.RFC3339, str); err == nil {
+				// user provided a timestamp, just use it
+				return str
+			}
+			if str == "now" {
+				// now is a special keyword for the current time
+				return time.Now().UTC().Format(time.RFC3339)
+			}
+			if dur, err := time.ParseDuration(str); err == nil {
+				// a duration string relative to now
+				return time.Now().Add(dur).Format(time.RFC3339)
+			}
+
+			logger.Warnf("template function 'timestamp' received unexpected value: %v", value)
+			return ""
+		},
+	}
 }

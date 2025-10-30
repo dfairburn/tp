@@ -7,6 +7,7 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.6.1
 	github.com/tidwall/pretty v1.2.1
+	github.com/xlab/treeprint v1.2.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

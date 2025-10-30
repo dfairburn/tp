@@ -1,13 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
+	"slices"
 
 	"github.com/dfairburn/tp/config"
 	"github.com/dfairburn/tp/handlers"
@@ -104,7 +103,16 @@ var (
 				logger.Fatalf("cannot use overrides due to errors: %v", err)
 			}
 
-			return handlers.Use(logger, template, vars, o, rawOutput)
+			var usageErr handlers.UsageError
+			err = handlers.Use(logger, template, vars, o, rawOutput)
+			if err != nil && errors.As(err, &usageErr) {
+				fmt.Println()
+				fmt.Println(err)
+				fmt.Println()
+				printTemplateHelp(cmd, args)
+				return nil
+			}
+			return err
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
@@ -175,40 +183,10 @@ func NewFilePath(path string, tmpDir string) (FilePath, error) {
 	}, nil
 }
 
-func NewAbsoluteFromRelative(templateDir string, p string) (string, error) {
-	var absolute string
-
-	fileSystem := os.DirFS(templateDir)
-	err := fs.WalkDir(fileSystem, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		absPathWithExt := fmt.Sprintf("%s/%s", templateDir, path)
-		absPathWithoutExt := fmt.Sprintf("%s/%s", templateDir, strings.TrimSuffix(path, filepath.Ext(path)))
-		relativeWithoutExt := strings.TrimSuffix(path, filepath.Ext(path))
-		if !filepath.IsAbs(p) {
-			p = fmt.Sprintf("%s/%s", templateDir, p)
-		}
-
-		switch p {
-		case absPathWithExt, absPathWithoutExt, path, relativeWithoutExt:
-			abs := path
-			if !filepath.IsAbs(path) {
-				abs = fmt.Sprintf("%s/%s", templateDir, path)
-			}
-
-			absolute = abs
-		}
-		return nil
-	})
-
-	return absolute, err
-}
-
 func init() {
 	useCmd.Flags().StringSliceVarP(&overrides, overrideFlagName, "o", []string{}, overrideUsage)
 	useCmd.Flags().BoolVar(&rawOutput, "raw", false, rawUsage)
+
 	err := useCmd.RegisterFlagCompletionFunc(overrideFlagName, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		_, varMap := config.LoadEnvironment(logger, envFile, c.EnvironmentFile)
 		var vars []string
@@ -223,5 +201,54 @@ func init() {
 		logger.WithError(err).Panic("cannot provide flag completions")
 	}
 
+	useCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		// cobra doesn't run these on help runs :(
+		initLogger()
+		initConfig()
+		initEnv()
+
+		printTemplateHelp(cmd, args)
+	})
 	rootCmd.AddCommand(useCmd)
+}
+
+func printTemplateHelp(cmd *cobra.Command, args []string) {
+	filteredArgs := slices.DeleteFunc(args, func(s string) bool {
+		return s == "use"
+	})
+
+	path, err := paths.NewAbsoluteFromRelative(filteredArgs[0], c.TemplatesDirectoryPath)
+	if err != nil && !os.IsNotExist(err) {
+		logger.WithError(err).Panic("generating template path")
+	}
+
+	_, err = os.Stat(path)
+	if err != nil && os.IsNotExist(err) {
+		// this template does not exist, show standard usage
+		fmt.Println(cmd.UsageString())
+		os.Exit(0)
+	} else if err != nil {
+		logger.WithError(err).Panic("checking template file")
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		logger.WithError(err).Panic("reading template file")
+	}
+
+	escaped, err := handlers.HandleUnquotedUrl(content)
+	if err != nil {
+		logger.WithError(err).Panic("escaping unquoted url")
+	}
+
+	tmplUsageBlock, err := handlers.GenerateTemplateUsage(escaped)
+	if err != nil {
+		logger.WithError(err).Panic("failure generating template usage")
+	}
+
+	fmt.Println(cmd.Short)
+	fmt.Println("")
+	fmt.Println("Template Parameters:")
+	fmt.Println(tmplUsageBlock)
+	fmt.Println(cmd.UsageString())
 }

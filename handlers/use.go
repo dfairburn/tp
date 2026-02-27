@@ -102,7 +102,14 @@ func Execute(logger *logging.Logger, templateFile string, vars map[interface{}]i
 		return result
 	}
 
-	overridden := Override(expanded, overrides)
+	// Expand any $(command) patterns in override values
+	expandedOverrides, err := config.ExpandOverrides(logger, overrides)
+	if err != nil {
+		result.Error = err
+		return result
+	}
+
+	overridden := Override(expanded, expandedOverrides)
 
 	for _, use := range varUses {
 		_, hasValue := overridden[use.Name()]

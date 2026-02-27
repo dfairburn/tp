@@ -142,6 +142,22 @@ func (o *Overrides) ToMap() map[interface{}]interface{} {
 	return m
 }
 
+// ExpandOverrides evaluates any $(command) patterns in override values.
+func ExpandOverrides(logger *logging.Logger, overrides Overrides) (Overrides, error) {
+	expanded := make(Overrides, 0, len(overrides))
+	for _, ov := range overrides {
+		val, didExpand, err := expandVariables(logger, ov.Key, ov.Value)
+		if err != nil {
+			return nil, err
+		}
+		if didExpand {
+			ov.Value = val
+		}
+		expanded = append(expanded, ov)
+	}
+	return expanded, nil
+}
+
 func newOverride(o string, logger *logging.Logger) (Override, error) {
 	ovr := strings.Split(o, ":")
 	if len(ovr) < 2 {

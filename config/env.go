@@ -36,72 +36,90 @@ func LoadEnvironment(logger *logging.Logger, paths ...string) (string, map[inter
 		logger.Fatalf("error: %v", err)
 	}
 
-	variables := expandVars(logger, y)
-
-	return path, variables
+	return path, y
 }
 
-func expandVars(logger *logging.Logger, y map[any]any) map[any]any {
+// ExpandVarsForKeys selectively expands only the variables whose keys are in the needed set.
+// For nested maps, it recursively descends and expands matching keys at any depth.
+// Variables not in the needed set are copied through with their raw (unexpanded) values.
+func ExpandVarsForKeys(logger *logging.Logger, y map[any]any, needed map[string]bool) (map[any]any, error) {
 	expandedMap := make(map[any]any)
 
 	for key, value := range y {
-		switch value.(type) {
+		keyStr, ok := key.(string)
+		if !ok {
+			expandedMap[key] = value
+			continue
+		}
+
+		switch v := value.(type) {
 		case string:
-			v := value.(string)
-			re := regexp.MustCompile("\\$\\((?P<command>.*)\\)")
-			result := make(map[string]string)
-			if !re.MatchString(v) {
-				expandedMap[key] = value
-				continue
-			}
-
-			match := re.FindStringSubmatch(v)
-			for i, name := range re.SubexpNames() {
-				if i != 0 && name != "" {
-					result[name] = match[i]
+			if needed[keyStr] {
+				expanded, didExpand, err := expandVariables(logger, keyStr, v)
+				if err != nil {
+					return nil, err
 				}
-			}
-
-			cmd, ok := result["command"]
-			if !ok {
+				if didExpand {
+					expandedMap[key] = expanded
+				} else {
+					expandedMap[key] = value
+				}
+			} else {
 				expandedMap[key] = value
-				continue
 			}
-
-			shell := os.Getenv("SHELL")
-			e := exec.Command(shell, "-c", cmd)
-			var out strings.Builder
-			e.Stdout = &out
-			err := e.Run()
-			if err != nil {
-				logger.
-					WithField("shell", shell).
-					WithField("command", cmd).
-					WithError(err).
-					Fatal("error expanding variable file, executing command")
-			}
-
-			expanded := strings.TrimSuffix(out.String(), "\n")
-			expandedMap[key] = expanded
 		case map[string]interface{}:
-			// need to cast the map back into a map[interface{}]interface{} to feed back into
-			// the expandVars func to be able to expand nested vars
+			// cast map[string]interface{} to map[any]any for recursive call
 			m := make(map[interface{}]interface{})
-			v := value.(map[string]interface{})
 			for k, vv := range v {
 				m[k] = vv
 			}
 
-			expanded := expandVars(logger, m)
+			expanded, err := ExpandVarsForKeys(logger, m, needed)
+			if err != nil {
+				return nil, err
+			}
 			expandedMap[key] = expanded
-			continue
 		default:
 			expandedMap[key] = value
-			continue
 		}
 	}
 
-	return expandedMap
+	return expandedMap, nil
+}
+
+func expandVariables(logger *logging.Logger, key, value string) (string, bool, error) {
+	v := value
+	re := regexp.MustCompile("\\$\\((?P<command>.*)\\)")
+	result := make(map[string]string)
+	if !re.MatchString(v) {
+		return "", false, nil
+	}
+
+	match := re.FindStringSubmatch(v)
+	for i, name := range re.SubexpNames() {
+		if i != 0 && name != "" {
+			result[name] = match[i]
+		}
+	}
+
+	cmd, ok := result["command"]
+	if !ok {
+		return "", false, nil
+	}
+
+	shell := os.Getenv("SHELL")
+	e := exec.Command(shell, "-c", cmd)
+	var out strings.Builder
+	var outErr strings.Builder
+	e.Stdout = &out
+	e.Stderr = &outErr
+	err := e.Run()
+	if err != nil {
+		return "", false, fmt.Errorf("error expanding variable %q, executing command %q: %w", key, cmd, err)
+	}
+
+	expanded := strings.TrimSuffix(out.String(), "\n")
+	return expanded, true, nil
 }
 
 type Override struct {

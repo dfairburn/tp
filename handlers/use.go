@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -39,11 +40,13 @@ type UseResult struct {
 }
 
 type Template struct {
-	Descriptions map[string]string `yaml:"descriptions"`
-	Url          string            `yaml:"url"`
-	Method       string            `yaml:"method"`
-	Headers      map[string]string `yaml:"headers"`
-	Body         string            `yaml:"body"`
+	Descriptions map[string]string      `yaml:"descriptions"`
+	Url          string                 `yaml:"url"`
+	Method       string                 `yaml:"method"`
+	Headers      map[string]string      `yaml:"headers"`
+	Body         string                 `yaml:"body"`
+	Query        string                 `yaml:"query"`
+	Variables    map[string]interface{} `yaml:"variables"`
 }
 
 // Use gets a filepath and "uses" that template
@@ -150,6 +153,32 @@ func Execute(logger *logging.Logger, templateFile string, vars map[interface{}]i
 	if err != nil {
 		result.Error = err
 		return result
+	}
+
+	// Auto-detect GraphQL templates by the presence of a query field
+	if tmp.Query != "" {
+		if tmp.Method == "" {
+			tmp.Method = "POST"
+		}
+		if tmp.Headers == nil {
+			tmp.Headers = map[string]string{}
+		}
+		if _, ok := tmp.Headers["Content-Type"]; !ok {
+			tmp.Headers["Content-Type"] = "application/json"
+		}
+
+		gqlBody := map[string]interface{}{
+			"query": tmp.Query,
+		}
+		if len(tmp.Variables) > 0 {
+			gqlBody["variables"] = tmp.Variables
+		}
+		bodyBytes, err := json.Marshal(gqlBody)
+		if err != nil {
+			result.Error = fmt.Errorf("marshalling graphql body: %w", err)
+			return result
+		}
+		tmp.Body = string(bodyBytes)
 	}
 
 	req, err := NewRequest(tmp)

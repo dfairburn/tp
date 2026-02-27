@@ -14,7 +14,8 @@ import (
 
 var (
 	// local flags
-	newCmd = &cobra.Command{
+	graphql bool
+	newCmd  = &cobra.Command{
 		Use:   "open",
 		Short: "Open creates a new template or opens an existing one",
 		Long:  "Open creates a new template, or opens an existing one and loads it into your configured editor (configured by $EDITOR, default vim)",
@@ -25,7 +26,7 @@ var (
 			}
 
 			filename := args[0]
-			return handlers.Open(logger, c.TemplatesDirectoryPath, filename)
+			return handlers.Open(logger, c.TemplatesDirectoryPath, filename, graphql)
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
@@ -73,6 +74,7 @@ var (
 
 func init() {
 	newCmd.Flags().StringSliceVarP(&overrides, "overrides", "o", []string{}, overrideUsage)
+	newCmd.Flags().BoolVarP(&graphql, "graphql", "g", false, "Create a GraphQL template instead of a standard HTTP template")
 
 	rootCmd.AddCommand(newCmd)
 }

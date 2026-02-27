@@ -32,7 +32,7 @@ var (
 
 	useCmd = &cobra.Command{
 		Use:   "use",
-		Short: "Uses a given template to send a curl request",
+		Short: "Uses a given template to send an HTTP request",
 		Long:  `Uses a given or chosen template, interpolates the variables and sends an http request`,
 		Args:  cobra.MinimumNArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -47,6 +47,7 @@ const (
 	ModeNormal Mode = iota
 	ModeSearch
 	ModeNewTemplate
+	ModeConfirmDelete
 )
 
 // Message types
@@ -107,6 +108,9 @@ type Model struct {
 
 	// New template input
 	newTemplateInput textinput.Model
+
+	// Delete confirmation
+	pendingDeleteTemplate *TemplateItem
 
 	// Dimensions
 	width  int
@@ -324,6 +328,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleSearchMode(msg)
 	case ModeNewTemplate:
 		return m.handleNewTemplateMode(msg)
+	case ModeConfirmDelete:
+		return m.handleConfirmDeleteMode(msg)
 	default:
 		return m.handleNormalMode(msg)
 	}
@@ -424,6 +430,18 @@ func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "No response to copy"
 		}
 		return m, m.clearStatusAfterDelay()
+
+	// Delete template
+	case "d":
+		if m.activePanel == PanelTemplates {
+			current := m.templates.Current()
+			if current != nil && !current.IsDir {
+				m.pendingDeleteTemplate = current
+				m.mode = ModeConfirmDelete
+				return m, nil
+			}
+		}
+		return m, nil
 	}
 
 	// Panel-specific keys
@@ -755,6 +773,37 @@ func (m Model) handleNewTemplateMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.newTemplateInput, cmd = m.newTemplateInput.Update(msg)
 	return m, cmd
+}
+
+func (m Model) handleConfirmDeleteMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		if m.pendingDeleteTemplate != nil {
+			err := os.Remove(m.pendingDeleteTemplate.AbsolutePath)
+			if err != nil {
+				m.statusMsg = "Failed to delete: " + err.Error()
+			} else {
+				m.statusMsg = "Deleted: " + m.pendingDeleteTemplate.Name
+				// Clear selection if it was the deleted template
+				if m.selectedTemplate == m.pendingDeleteTemplate {
+					m.selectedTemplate = nil
+					m.response = nil
+				}
+				// Remove from cache
+				delete(m.responseCache, m.pendingDeleteTemplate.AbsolutePath)
+			}
+			m.pendingDeleteTemplate = nil
+			m.mode = ModeNormal
+			return m, tea.Batch(m.loadTemplates, m.clearStatusAfterDelay())
+		}
+		m.mode = ModeNormal
+		return m, nil
+	case "n", "N", "esc":
+		m.pendingDeleteTemplate = nil
+		m.mode = ModeNormal
+		return m, nil
+	}
+	return m, nil
 }
 
 func (m Model) openEditor(filePath string) tea.Cmd {
@@ -1150,6 +1199,8 @@ func (m Model) renderStatusBar() string {
 		leftContent = " SEARCH "
 	case ModeNewTemplate:
 		leftContent = " NEW: " + m.newTemplateInput.View() + " "
+	case ModeConfirmDelete:
+		leftContent = fmt.Sprintf(" DELETE '%s'? [y/n] ", m.pendingDeleteTemplate.Name)
 	default:
 		leftContent = " NORMAL "
 	}
@@ -1166,7 +1217,7 @@ func (m Model) renderStatusBar() string {
 	}
 
 	// Right side - help
-	help := " q:quit  /:search  x:send  y:copy  o:override  e:edit  n:new  ?:help "
+	help := " q:quit  /:search  x:send  y:copy  o:override  e:edit  n:new  d:delete  ?:help "
 	if !m.showHelp {
 		help = " ?:help "
 	}

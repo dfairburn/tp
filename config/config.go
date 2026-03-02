@@ -62,7 +62,25 @@ func tryFiles(logger *logging.Logger, paths ...string) (*os.File, string, error)
 
 func LoadTemplateFiles(l *logging.Logger, dirPath string, walkFunc func(string, os.FileInfo, error) error) error {
 	path := tppaths.Expand(dirPath)
-	err := filepath.Walk(path, walkFunc)
+
+	// Wrap the user's walkFunc to skip hidden files and directories
+	wrappedWalkFunc := func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return walkFunc(p, info, err)
+		}
+
+		// Skip hidden files and directories (starting with '.')
+		if len(info.Name()) > 0 && info.Name()[0] == '.' {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		return walkFunc(p, info, err)
+	}
+
+	err := filepath.Walk(path, wrappedWalkFunc)
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,1018 @@
+package tui
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/dfairburn/tp/config"
+	"github.com/dfairburn/tp/paths"
+	"github.com/dfairburn/tp/static"
+	logging "github.com/sirupsen/logrus"
+)
+
+// Panel represents the focused panel
+type Panel int
+
+const (
+	PanelTemplates Panel = iota
+	PanelRequest
+	PanelResponse
+	PanelOverrides
+)
+
+// Tab in request/response panel
+type Tab int
+
+const (
+	TabHeaders Tab = iota
+	TabBody
+	TabParams
+)
+
+// Mode represents the current input mode
+type Mode int
+
+const (
+	ModeNormal Mode = iota
+	ModeSearch
+	ModeOverride
+	ModeNewTemplate
+)
+
+// Message types
+type templatesLoadedMsg struct {
+	err error
+}
+
+type requestCompleteMsg struct {
+	result *RequestResult
+}
+
+type editorFinishedMsg struct {
+	err error
+}
+
+// Model is the main TUI model
+type Model struct {
+	// Config
+	config  config.Config
+	envFile string
+	vars    map[interface{}]interface{}
+	logger  *logging.Logger
+
+	// Panels
+	activePanel Panel
+	mode        Mode
+
+	// Template list
+	templates *TemplateList
+
+	// Request details
+	selectedTemplate *TemplateItem
+	requestTab       Tab
+
+	// Response
+	response    *RequestResult
+	responseTab Tab
+
+	// Viewports for scrollable content
+	requestViewport  viewport.Model
+	responseViewport viewport.Model
+
+	// Inputs
+	searchInput   textinput.Model
+	overrideInput textinput.Model
+
+	// Overrides
+	overrides []config.Override
+
+	// State
+	loading bool
+	spinner spinner.Model
+	err     error
+
+	// New template input
+	newTemplateInput textinput.Model
+
+	// Dimensions
+	width  int
+	height int
+
+	// Help visibility
+	showHelp bool
+}
+
+// New creates a new TUI model
+func New(logger *logging.Logger, cfg config.Config, envFile string) Model {
+	// Initialize spinner
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(primaryColor)
+
+	// Initialize search input
+	searchInput := textinput.New()
+	searchInput.Placeholder = "Search templates..."
+	searchInput.CharLimit = 50
+
+	// Initialize override input
+	overrideInput := textinput.New()
+	overrideInput.Placeholder = "key:value"
+	overrideInput.CharLimit = 200
+
+	// Initialize new template input
+	newTemplateInput := textinput.New()
+	newTemplateInput.Placeholder = "template-name"
+	newTemplateInput.CharLimit = 100
+
+	// Initialize viewports
+	requestVP := viewport.New(0, 0)
+	responseVP := viewport.New(0, 0)
+
+	// Load environment
+	_, vars := config.LoadEnvironment(logger, envFile, cfg.EnvironmentFile)
+
+	return Model{
+		config:           cfg,
+		envFile:          envFile,
+		vars:             vars,
+		logger:           logger,
+		activePanel:      PanelTemplates,
+		mode:             ModeNormal,
+		templates:        NewTemplateList(cfg.TemplatesDirectoryPath),
+		requestTab:       TabBody,
+		responseTab:      TabBody,
+		requestViewport:  requestVP,
+		responseViewport: responseVP,
+		searchInput:      searchInput,
+		overrideInput:    overrideInput,
+		newTemplateInput: newTemplateInput,
+		overrides:        make([]config.Override, 0),
+		spinner:          s,
+		showHelp:         true,
+	}
+}
+
+// Init initializes the TUI
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(
+		m.loadTemplates,
+		m.spinner.Tick,
+	)
+}
+
+func (m Model) loadTemplates() tea.Msg {
+	err := m.templates.Load(m.logger)
+	return templatesLoadedMsg{err: err}
+}
+
+// Update handles messages
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		return m.handleKeyMsg(msg)
+
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.updateViewportSizes()
+		return m, nil
+
+	case templatesLoadedMsg:
+		m.loading = false
+		if msg.err != nil {
+			m.err = msg.err
+		}
+		return m, nil
+
+	case requestCompleteMsg:
+		m.loading = false
+		m.response = msg.result
+		m.responseViewport.SetContent(m.renderResponseBody())
+		m.responseViewport.GotoTop()
+		return m, nil
+
+	case editorFinishedMsg:
+		// Reload templates after editor closes
+		if msg.err != nil {
+			m.err = msg.err
+		}
+		// Reload the selected template if it was being edited
+		if m.selectedTemplate != nil {
+			_ = m.selectedTemplate.LoadMetadata()
+			m.requestViewport.SetContent(m.renderRequestDetails())
+		}
+		return m, m.loadTemplates
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+	}
+
+	// Update sub-components
+	if m.mode == ModeSearch {
+		var cmd tea.Cmd
+		m.searchInput, cmd = m.searchInput.Update(msg)
+		cmds = append(cmds, cmd)
+		m.templates.Filter(m.searchInput.Value())
+	}
+
+	if m.mode == ModeOverride {
+		var cmd tea.Cmd
+		m.overrideInput, cmd = m.overrideInput.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
+	if m.mode == ModeNewTemplate {
+		var cmd tea.Cmd
+		m.newTemplateInput, cmd = m.newTemplateInput.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
+	// Update viewports
+	if m.activePanel == PanelRequest {
+		var cmd tea.Cmd
+		m.requestViewport, cmd = m.requestViewport.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
+	if m.activePanel == PanelResponse {
+		var cmd tea.Cmd
+		m.responseViewport, cmd = m.responseViewport.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+
+	// Global keys
+	switch key {
+	case "ctrl+c", "q":
+		if m.mode == ModeNormal {
+			return m, tea.Quit
+		}
+		// Exit current mode
+		m.mode = ModeNormal
+		m.searchInput.Blur()
+		m.overrideInput.Blur()
+		return m, nil
+
+	case "esc":
+		if m.mode != ModeNormal {
+			m.mode = ModeNormal
+			m.searchInput.Blur()
+			m.overrideInput.Blur()
+			return m, nil
+		}
+		return m, nil
+
+	case "?":
+		if m.mode == ModeNormal {
+			m.showHelp = !m.showHelp
+			return m, nil
+		}
+	}
+
+	// Mode-specific handling
+	switch m.mode {
+	case ModeSearch:
+		return m.handleSearchMode(msg)
+	case ModeOverride:
+		return m.handleOverrideMode(msg)
+	case ModeNewTemplate:
+		return m.handleNewTemplateMode(msg)
+	default:
+		return m.handleNormalMode(msg)
+	}
+}
+
+func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+
+	switch key {
+	// Panel navigation
+	case "tab":
+		m.activePanel = (m.activePanel + 1) % 4
+		return m, nil
+	case "shift+tab":
+		m.activePanel = (m.activePanel + 3) % 4 // Wrap backwards
+		return m, nil
+	case "1":
+		m.activePanel = PanelTemplates
+		return m, nil
+	case "2":
+		m.activePanel = PanelRequest
+		return m, nil
+	case "3":
+		m.activePanel = PanelResponse
+		return m, nil
+	case "4":
+		m.activePanel = PanelOverrides
+		return m, nil
+
+	// Search mode
+	case "/":
+		m.mode = ModeSearch
+		m.searchInput.Focus()
+		return m, textinput.Blink
+
+	// Override mode
+	case "o":
+		if m.activePanel == PanelOverrides || m.selectedTemplate != nil {
+			m.mode = ModeOverride
+			m.overrideInput.Focus()
+			return m, textinput.Blink
+		}
+		return m, nil
+
+	// Clear overrides
+	case "C":
+		m.overrides = make([]config.Override, 0)
+		return m, nil
+
+	// Execute request
+	case "enter":
+		if m.activePanel == PanelTemplates {
+			selected := m.templates.Select()
+			if selected != nil {
+				m.selectedTemplate = selected
+				m.requestViewport.SetContent(m.renderRequestDetails())
+				m.requestViewport.GotoTop()
+			}
+			return m, nil
+		}
+		return m, nil
+
+	case "x", "ctrl+enter":
+		if m.selectedTemplate != nil && !m.loading {
+			m.loading = true
+			m.response = nil
+			return m, m.executeRequest
+		}
+		return m, nil
+
+	// Refresh templates
+	case "r":
+		if m.activePanel == PanelTemplates {
+			m.loading = true
+			return m, m.loadTemplates
+		}
+		return m, nil
+
+	// Edit current template
+	case "e":
+		if m.selectedTemplate != nil {
+			return m, m.openEditor(m.selectedTemplate.AbsolutePath)
+		}
+		return m, nil
+
+	// Create new template
+	case "n":
+		m.mode = ModeNewTemplate
+		m.newTemplateInput.SetValue("")
+		m.newTemplateInput.Focus()
+		return m, textinput.Blink
+	}
+
+	// Panel-specific keys
+	switch m.activePanel {
+	case PanelTemplates:
+		return m.handleTemplatesPanelKeys(msg)
+	case PanelRequest:
+		return m.handleRequestPanelKeys(msg)
+	case PanelResponse:
+		return m.handleResponsePanelKeys(msg)
+	case PanelOverrides:
+		return m.handleOverridesPanelKeys(msg)
+	}
+
+	return m, nil
+}
+
+func (m Model) handleTemplatesPanelKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Calculate page size based on visible template list height
+	panelHeight := m.height - 4
+	listHeight := panelHeight - 4
+	if m.mode == ModeSearch {
+		listHeight -= 3
+	}
+	pageSize := max(1, listHeight-1)
+
+	switch msg.String() {
+	case "j", "down":
+		m.templates.MoveDown()
+	case "k", "up":
+		m.templates.MoveUp()
+	case "ctrl+d", "pgdown":
+		m.templates.PageDown(pageSize)
+	case "ctrl+u", "pgup":
+		m.templates.PageUp(pageSize)
+	case "space":
+		m.templates.ToggleExpand()
+	case "g":
+		m.templates.cursor = 0
+	case "G":
+		m.templates.cursor = m.templates.Len() - 1
+	}
+	return m, nil
+}
+
+func (m Model) handleRequestPanelKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "j", "down":
+		m.requestViewport.ScrollDown(1)
+	case "k", "up":
+		m.requestViewport.ScrollUp(1)
+	case "h":
+		m.requestTab = TabHeaders
+		m.requestViewport.SetContent(m.renderRequestDetails())
+	case "b":
+		m.requestTab = TabBody
+		m.requestViewport.SetContent(m.renderRequestDetails())
+	case "p":
+		m.requestTab = TabParams
+		m.requestViewport.SetContent(m.renderRequestDetails())
+	}
+	return m, nil
+}
+
+func (m Model) handleResponsePanelKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "j", "down":
+		m.responseViewport.ScrollDown(1)
+	case "k", "up":
+		m.responseViewport.ScrollUp(1)
+	case "d":
+		m.responseViewport.HalfPageDown()
+	case "u":
+		m.responseViewport.HalfPageUp()
+	case "g":
+		m.responseViewport.GotoTop()
+	case "G":
+		m.responseViewport.GotoBottom()
+	case "h":
+		m.responseTab = TabHeaders
+		m.responseViewport.SetContent(m.renderResponseBody())
+	case "b":
+		m.responseTab = TabBody
+		m.responseViewport.SetContent(m.renderResponseBody())
+	}
+	return m, nil
+}
+
+func (m Model) handleOverridesPanelKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "d", "backspace":
+		// Delete selected override (simplified - deletes last)
+		if len(m.overrides) > 0 {
+			m.overrides = m.overrides[:len(m.overrides)-1]
+		}
+	}
+	return m, nil
+}
+
+func (m Model) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		// Get the currently highlighted item before clearing search
+		currentItem := m.templates.Current()
+
+		if currentItem != nil {
+			// Clear search and focus on this item in the full list
+			m.templates.ClearSearchAndFocus(currentItem)
+			m.searchInput.SetValue("")
+
+			// If it's a file, select it
+			if !currentItem.IsDir {
+				m.selectedTemplate = currentItem
+				m.templates.selectedItem = currentItem
+				m.requestViewport.SetContent(m.renderRequestDetails())
+				m.requestViewport.GotoTop()
+			}
+			// If it's a folder, it's now expanded and focused
+		} else {
+			// No item selected, just clear the search
+			m.templates.Filter("")
+			m.searchInput.SetValue("")
+		}
+
+		m.mode = ModeNormal
+		m.searchInput.Blur()
+		return m, nil
+	case "esc":
+		// Cancel search without selecting - restore full list
+		m.templates.Filter("")
+		m.searchInput.SetValue("")
+		m.mode = ModeNormal
+		m.searchInput.Blur()
+		return m, nil
+	case "up", "ctrl+p":
+		m.templates.MoveUp()
+		return m, nil
+	case "down", "ctrl+n":
+		m.templates.MoveDown()
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.searchInput, cmd = m.searchInput.Update(msg)
+	m.templates.Filter(m.searchInput.Value())
+	return m, cmd
+}
+
+func (m Model) handleOverrideMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		// Parse and add override
+		val := m.overrideInput.Value()
+		if val != "" {
+			parts := strings.SplitN(val, ":", 2)
+			if len(parts) == 2 {
+				m.overrides = append(m.overrides, config.Override{
+					Key:   strings.TrimSpace(parts[0]),
+					Value: strings.TrimSpace(parts[1]),
+				})
+			}
+		}
+		m.overrideInput.SetValue("")
+		m.mode = ModeNormal
+		m.overrideInput.Blur()
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.overrideInput, cmd = m.overrideInput.Update(msg)
+	return m, cmd
+}
+
+func (m Model) handleNewTemplateMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		name := m.newTemplateInput.Value()
+		if name != "" {
+			// Create the template file with default content
+			templatePath, err := paths.NewAbsoluteFromRelative(name+".yml", m.config.TemplatesDirectoryPath)
+			if err == nil {
+				// Write default template content
+				err = os.WriteFile(templatePath, static.DefaultTemplate, 0644)
+				if err == nil {
+					// Open in editor
+					m.newTemplateInput.SetValue("")
+					m.mode = ModeNormal
+					m.newTemplateInput.Blur()
+					return m, m.openEditor(templatePath)
+				}
+			}
+		}
+		m.newTemplateInput.SetValue("")
+		m.mode = ModeNormal
+		m.newTemplateInput.Blur()
+		return m, nil
+	case "esc":
+		m.newTemplateInput.SetValue("")
+		m.mode = ModeNormal
+		m.newTemplateInput.Blur()
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.newTemplateInput, cmd = m.newTemplateInput.Update(msg)
+	return m, cmd
+}
+
+func (m Model) openEditor(filePath string) tea.Cmd {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vim"
+	}
+
+	c := exec.Command(editor, filePath)
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return editorFinishedMsg{err: err}
+	})
+}
+
+func (m Model) executeRequest() tea.Msg {
+	if m.selectedTemplate == nil {
+		return requestCompleteMsg{result: &RequestResult{Error: fmt.Errorf("no template selected")}}
+	}
+
+	result := ExecuteRequest(m.logger, m.selectedTemplate.AbsolutePath, m.vars, m.overrides)
+	return requestCompleteMsg{result: result}
+}
+
+func (m *Model) updateViewportSizes() {
+	// Calculate panel sizes
+	sidebarWidth := m.width / 4
+	if sidebarWidth < 30 {
+		sidebarWidth = 30
+	}
+	if sidebarWidth > 50 {
+		sidebarWidth = 50
+	}
+
+	mainWidth := m.width - sidebarWidth - 6 // Account for borders
+	panelHeight := (m.height - 6) / 2       // Two panels vertically
+
+	m.requestViewport.Width = mainWidth - 4
+	m.requestViewport.Height = panelHeight - 6
+
+	m.responseViewport.Width = mainWidth - 4
+	m.responseViewport.Height = panelHeight - 6
+}
+
+// View renders the TUI
+func (m Model) View() string {
+	if m.width == 0 {
+		return "Loading..."
+	}
+
+	// Calculate layout
+	sidebarWidth := m.width / 4
+	if sidebarWidth < 30 {
+		sidebarWidth = 30
+	}
+	if sidebarWidth > 50 {
+		sidebarWidth = 50
+	}
+
+	mainWidth := m.width - sidebarWidth - 4
+	panelHeight := (m.height - 5) / 2
+
+	// Build panels
+	leftPanel := m.renderTemplatesPanel(sidebarWidth-2, m.height-4)
+	requestPanel := m.renderRequestPanel(mainWidth-2, panelHeight-1)
+	responsePanel := m.renderResponsePanel(mainWidth-2, panelHeight-1)
+
+	// Combine main panels
+	rightSide := lipgloss.JoinVertical(lipgloss.Left, requestPanel, responsePanel)
+
+	// Main content
+	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightSide)
+
+	// Status bar
+	statusBar := m.renderStatusBar()
+
+	return lipgloss.JoinVertical(lipgloss.Left, mainContent, statusBar)
+}
+
+func (m Model) renderTemplatesPanel(width, height int) string {
+	style := getPanelStyle()
+	if m.activePanel == PanelTemplates {
+		style = getActivePanelStyle()
+	}
+
+	// Title
+	title := titleStyle.Render("  Templates")
+
+	// Search bar
+	searchBar := ""
+	if m.mode == ModeSearch {
+		searchBar = focusedInputStyle.Width(width - 4).Render(m.searchInput.View())
+	} else if m.searchInput.Value() != "" {
+		searchBar = inputStyle.Width(width - 4).Render("/" + m.searchInput.Value())
+	}
+
+	// Template list
+	listHeight := height - 4
+	if searchBar != "" {
+		listHeight -= 3
+	}
+
+	var items []string
+	usedLines := 0
+
+	// Calculate visible range - account for selected item taking 2 lines
+	cursor := m.templates.Cursor()
+	allItems := m.templates.Items()
+
+	// Handle empty list
+	if len(allItems) == 0 {
+		emptyMsg := mutedStyle.Render("No templates found")
+		items = append(items, emptyMsg)
+		usedLines = 1
+	} else {
+		// Find start index that keeps cursor visible
+		startIdx := 0
+
+		// Adjust start if cursor would be off screen
+		if cursor >= listHeight {
+			startIdx = cursor - listHeight + 1
+		}
+
+		for i := startIdx; i < len(allItems) && usedLines < listHeight; i++ {
+			item := allItems[i]
+			if item == nil {
+				continue
+			}
+			rendered := m.renderTemplateItem(item, i == cursor, width-6)
+			items = append(items, rendered)
+			usedLines++
+		}
+	}
+
+	// Pad with empty lines if needed
+	for usedLines < listHeight {
+		items = append(items, strings.Repeat(" ", width-4))
+		usedLines++
+	}
+
+	list := strings.Join(items, "\n")
+
+	content := title + "\n"
+	if searchBar != "" {
+		content += searchBar + "\n"
+	}
+	content += list
+
+	return style.Width(width).Height(height).Render(content)
+}
+
+func (m Model) renderTemplateItem(item *TemplateItem, selected bool, width int) string {
+	if item == nil {
+		return strings.Repeat(" ", width)
+	}
+	indent := strings.Repeat("  ", item.Depth)
+
+	var lines []string
+	if item.IsDir {
+		arrow := "▸"
+		if item.Expanded {
+			arrow = "▾"
+		}
+		line := fmt.Sprintf("%s%s %s/", indent, arrow, item.Name)
+		// Truncate if too long
+		if len(line) > width {
+			line = line[:width-3] + "..."
+		}
+		line = fmt.Sprintf("%-*s", width, line)
+		if selected {
+			return selectedItemStyle.Render(line)
+		}
+		return normalItemStyle.Render(line)
+	}
+
+	// For template files, show method + name on first line
+	methodStr := fmt.Sprintf("%-6s", item.Method)
+
+	// Calculate visible width for truncation (without ANSI codes)
+	// Layout: indent + method (6 chars) + " " + name
+	prefixWidth := len(indent) + 6 + 1
+	availableNameWidth := width - prefixWidth
+
+	name := item.Name
+	if availableNameWidth > 3 && len(name) > availableNameWidth {
+		name = name[:availableNameWidth-3] + "..."
+	} else if availableNameWidth <= 3 {
+		name = ""
+	}
+
+	// Pad name to fill available space
+	if len(name) < availableNameWidth {
+		name = name + strings.Repeat(" ", availableNameWidth-len(name))
+	}
+
+	// Build styled line - apply method color, then wrap entire line in selection style if needed
+	methodStyle := getMethodStyle(item.Method)
+	styledMethod := methodStyle.Render(methodStr)
+
+	if selected {
+		lines = append(lines, fmt.Sprintf("%s%s %s",
+			selectedItemStyle.Render(indent),
+			methodStyle.Copy().Background(highlightBg).Render(methodStr),
+			selectedItemStyle.Render(name)))
+	} else {
+		lines = append(lines, fmt.Sprintf("%s%s %s", indent, styledMethod, normalItemStyle.Render(name)))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) renderRequestPanel(width, height int) string {
+	style := getPanelStyle()
+	if m.activePanel == PanelRequest {
+		style = getActivePanelStyle()
+	}
+
+	// Title with tabs
+	headerTab := inactiveTabStyle.Render("Headers [h]")
+	bodyTab := inactiveTabStyle.Render("Body [b]")
+	paramsTab := inactiveTabStyle.Render("Params [p]")
+
+	switch m.requestTab {
+	case TabHeaders:
+		headerTab = activeTabStyle.Render("Headers [h]")
+	case TabBody:
+		bodyTab = activeTabStyle.Render("Body [b]")
+	case TabParams:
+		paramsTab = activeTabStyle.Render("Params [p]")
+	}
+
+	tabs := lipgloss.JoinHorizontal(lipgloss.Left, headerTab, " ", bodyTab, " ", paramsTab)
+	title := titleStyle.Render("  Request") + "  " + tabs
+
+	// Method and URL
+	var methodURL string
+	if m.selectedTemplate != nil {
+		methodStyle := getMethodStyle(m.selectedTemplate.Method)
+		method := methodStyle.Render(m.selectedTemplate.Method)
+		url := urlStyle.Render(truncate(m.selectedTemplate.URL, width-15))
+		methodURL = method + " " + url
+	} else {
+		methodURL = mutedStyle.Render("Select a template to view request details")
+	}
+
+	content := title + "\n" + methodURL + "\n\n"
+
+	// Viewport content
+	if m.selectedTemplate != nil {
+		content += m.requestViewport.View()
+	}
+
+	return style.Width(width).Height(height).Render(content)
+}
+
+func (m Model) renderRequestDetails() string {
+	if m.selectedTemplate == nil {
+		return ""
+	}
+
+	var content strings.Builder
+
+	switch m.requestTab {
+	case TabHeaders:
+		if len(m.selectedTemplate.Headers) == 0 {
+			content.WriteString(mutedStyle.Render("No headers defined"))
+		} else {
+			for k, v := range m.selectedTemplate.Headers {
+				content.WriteString(headerKeyStyle.Render(k))
+				content.WriteString(": ")
+				content.WriteString(headerValueStyle.Render(v))
+				content.WriteString("\n")
+			}
+		}
+	case TabBody:
+		if m.selectedTemplate.Body == "" {
+			content.WriteString(mutedStyle.Render("No body defined"))
+		} else {
+			content.WriteString(m.selectedTemplate.Body)
+		}
+	case TabParams:
+		// Show template variables/descriptions
+		if len(m.selectedTemplate.Descriptions) == 0 {
+			content.WriteString(mutedStyle.Render("No parameters documented"))
+		} else {
+			for k, v := range m.selectedTemplate.Descriptions {
+				content.WriteString(overrideKeyStyle.Render(k))
+				content.WriteString(": ")
+				content.WriteString(subtitleStyle.Render(v))
+				content.WriteString("\n")
+			}
+		}
+	}
+
+	return content.String()
+}
+
+func (m Model) renderResponsePanel(width, height int) string {
+	style := getPanelStyle()
+	if m.activePanel == PanelResponse {
+		style = getActivePanelStyle()
+	}
+
+	// Title with tabs
+	headerTab := inactiveTabStyle.Render("Headers [h]")
+	bodyTab := inactiveTabStyle.Render("Body [b]")
+
+	switch m.responseTab {
+	case TabHeaders:
+		headerTab = activeTabStyle.Render("Headers [h]")
+	case TabBody:
+		bodyTab = activeTabStyle.Render("Body [b]")
+	}
+
+	tabs := lipgloss.JoinHorizontal(lipgloss.Left, headerTab, " ", bodyTab)
+	title := titleStyle.Render("  Response") + "  " + tabs
+
+	// Status line
+	var statusLine string
+	if m.loading {
+		statusLine = m.spinner.View() + " Sending request..."
+	} else if m.response != nil {
+		if m.response.Error != nil {
+			statusLine = errorStatusStyle.Render("Error: " + m.response.Error.Error())
+		} else {
+			status := renderStatusCode(m.response.StatusCode)
+			duration := fmt.Sprintf("%.2fms", float64(m.response.Duration.Microseconds())/1000)
+			size := fmt.Sprintf("%d bytes", m.response.Size)
+			statusLine = fmt.Sprintf("%s  %s  %s", status, mutedStyle.Render(duration), mutedStyle.Render(size))
+		}
+	} else {
+		statusLine = mutedStyle.Render("Press 'x' to send request")
+	}
+
+	content := title + "\n" + statusLine + "\n\n"
+	content += m.responseViewport.View()
+
+	return style.Width(width).Height(height).Render(content)
+}
+
+func (m Model) renderResponseBody() string {
+	if m.response == nil {
+		return ""
+	}
+
+	if m.response.Error != nil {
+		return errorStatusStyle.Render(m.response.Error.Error())
+	}
+
+	switch m.responseTab {
+	case TabHeaders:
+		var content strings.Builder
+		for k, v := range m.response.Headers {
+			content.WriteString(headerKeyStyle.Render(k))
+			content.WriteString(": ")
+			content.WriteString(headerValueStyle.Render(strings.Join(v, ", ")))
+			content.WriteString("\n")
+		}
+		return content.String()
+	case TabBody:
+		return m.response.Body
+	}
+
+	return ""
+}
+
+func (m Model) renderStatusBar() string {
+	// Left side - mode/status
+	var leftContent string
+	switch m.mode {
+	case ModeSearch:
+		leftContent = " SEARCH "
+	case ModeOverride:
+		leftContent = " OVERRIDE: " + m.overrideInput.View() + " "
+	case ModeNewTemplate:
+		leftContent = " NEW: " + m.newTemplateInput.View() + " "
+	default:
+		leftContent = " NORMAL "
+	}
+
+	// Middle - overrides count
+	overridesCount := ""
+	if len(m.overrides) > 0 {
+		overridesCount = fmt.Sprintf(" | Overrides: %d ", len(m.overrides))
+		for _, o := range m.overrides {
+			overridesCount += fmt.Sprintf("[%s=%s] ", o.Key, truncate(o.Value, 10))
+		}
+	}
+
+	// Right side - help
+	help := " q:quit  /:search  x:send  o:override  e:edit  n:new  ?:help "
+	if !m.showHelp {
+		help = " ?:help "
+	}
+
+	// Calculate widths
+	leftWidth := lipgloss.Width(leftContent)
+	rightWidth := lipgloss.Width(help)
+	middleWidth := m.width - leftWidth - rightWidth
+
+	if middleWidth < 0 {
+		middleWidth = 0
+	}
+
+	middle := fmt.Sprintf("%-*s", middleWidth, overridesCount)
+
+	return statusBarStyle.Render(leftContent + middle + help)
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
+// Run starts the TUI
+func Run(logger *logging.Logger, cfg config.Config, envFile string) error {
+	p := tea.NewProgram(
+		New(logger, cfg, envFile),
+		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
+	)
+
+	_, err := p.Run()
+	return err
+}

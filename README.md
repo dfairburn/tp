@@ -279,7 +279,7 @@ tp tui
 | `space` | Toggle folder expansion |
 | `x` | Execute selected request |
 | `/` | Search templates |
-| `o` | Add variable override |
+| `o` | Edit overrides file in `$EDITOR` |
 | `C` | Clear all overrides |
 | `r` | Refresh template list |
 | `e` | Edit selected template in `$EDITOR` |
@@ -289,6 +289,18 @@ tp tui
 | `p` | Show params tab (request panel only) |
 | `q` / `ctrl+c` | Quit |
 | `esc` | Exit current mode |
+
+**Overrides:**
+
+Press `o` to open the overrides file (`~/.tp/overrides.yaml`) in your editor. This file lets you define variable overrides in YAML format:
+
+```yaml
+# Override variables for tp templates
+id: "12345"
+name: "test"
+```
+
+These values will override any matching variables in your templates. When you save and close the editor, overrides are automatically reloaded. Press `C` to clear all overrides.
 
 ### tp completion
 

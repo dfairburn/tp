@@ -207,6 +207,7 @@ func (t *TemplateItem) LoadMetadata() error {
 
 // Filter filters the items based on a search query.
 // When a child matches, its parent folders are also included for context.
+// When a folder matches, all its children are also included.
 func (tl *TemplateList) Filter(query string) {
 	tl.searchQuery = strings.ToLower(query)
 
@@ -215,16 +216,20 @@ func (tl *TemplateList) Filter(query string) {
 		return
 	}
 
-	// First pass: find all matching items and collect their parents
+	// First pass: find all matching items and collect their parents and children
 	matchingItems := make(map[*TemplateItem]bool)
 	for _, item := range tl.flatItems {
 		if strings.Contains(strings.ToLower(item.Name), tl.searchQuery) {
 			matchingItems[item] = true
-			// Also include all parent folders for context
+			// Include all parent folders for context
 			parent := item.Parent
 			for parent != nil {
 				matchingItems[parent] = true
 				parent = parent.Parent
+			}
+			// If it's a folder, include all children recursively
+			if item.IsDir {
+				tl.addChildrenToMatch(item, matchingItems)
 			}
 		}
 	}
@@ -240,6 +245,16 @@ func (tl *TemplateList) Filter(query string) {
 	// Reset cursor if out of bounds
 	if tl.cursor >= len(tl.filteredItems) {
 		tl.cursor = max(0, len(tl.filteredItems)-1)
+	}
+}
+
+// addChildrenToMatch recursively adds all children of an item to the matching set
+func (tl *TemplateList) addChildrenToMatch(item *TemplateItem, matchingItems map[*TemplateItem]bool) {
+	for _, child := range item.Children {
+		matchingItems[child] = true
+		if child.IsDir {
+			tl.addChildrenToMatch(child, matchingItems)
+		}
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -15,6 +16,7 @@ import (
 	"github.com/dfairburn/tp/paths"
 	"github.com/dfairburn/tp/static"
 	logging "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
 )
 
 // Panel represents the focused panel
@@ -24,7 +26,6 @@ const (
 	PanelTemplates Panel = iota
 	PanelRequest
 	PanelResponse
-	PanelOverrides
 )
 
 // Tab in request/response panel
@@ -42,7 +43,6 @@ type Mode int
 const (
 	ModeNormal Mode = iota
 	ModeSearch
-	ModeOverride
 	ModeNewTemplate
 )
 
@@ -87,8 +87,7 @@ type Model struct {
 	responseViewport viewport.Model
 
 	// Inputs
-	searchInput   textinput.Model
-	overrideInput textinput.Model
+	searchInput textinput.Model
 
 	// Overrides
 	overrides []config.Override
@@ -121,11 +120,6 @@ func New(logger *logging.Logger, cfg config.Config, envFile string) Model {
 	searchInput.Placeholder = "Search templates..."
 	searchInput.CharLimit = 50
 
-	// Initialize override input
-	overrideInput := textinput.New()
-	overrideInput.Placeholder = "key:value"
-	overrideInput.CharLimit = 200
-
 	// Initialize new template input
 	newTemplateInput := textinput.New()
 	newTemplateInput.Placeholder = "template-name"
@@ -138,7 +132,7 @@ func New(logger *logging.Logger, cfg config.Config, envFile string) Model {
 	// Load environment
 	_, vars := config.LoadEnvironment(logger, envFile, cfg.EnvironmentFile)
 
-	return Model{
+	m := Model{
 		config:           cfg,
 		envFile:          envFile,
 		vars:             vars,
@@ -151,12 +145,16 @@ func New(logger *logging.Logger, cfg config.Config, envFile string) Model {
 		requestViewport:  requestVP,
 		responseViewport: responseVP,
 		searchInput:      searchInput,
-		overrideInput:    overrideInput,
 		newTemplateInput: newTemplateInput,
 		overrides:        make([]config.Override, 0),
 		spinner:          s,
 		showHelp:         true,
 	}
+
+	// Load persisted overrides
+	m.loadOverrides()
+
+	return m
 }
 
 // Init initializes the TUI
@@ -201,10 +199,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case editorFinishedMsg:
-		// Reload templates after editor closes
+		// Reload templates and overrides after editor closes
 		if msg.err != nil {
 			m.err = msg.err
 		}
+		// Reload overrides in case the overrides file was edited
+		m.loadOverrides()
 		// Reload the selected template if it was being edited
 		if m.selectedTemplate != nil {
 			_ = m.selectedTemplate.LoadMetadata()
@@ -224,12 +224,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.searchInput, cmd = m.searchInput.Update(msg)
 		cmds = append(cmds, cmd)
 		m.templates.Filter(m.searchInput.Value())
-	}
-
-	if m.mode == ModeOverride {
-		var cmd tea.Cmd
-		m.overrideInput, cmd = m.overrideInput.Update(msg)
-		cmds = append(cmds, cmd)
 	}
 
 	if m.mode == ModeNewTemplate {
@@ -266,14 +260,12 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Exit current mode
 		m.mode = ModeNormal
 		m.searchInput.Blur()
-		m.overrideInput.Blur()
 		return m, nil
 
 	case "esc":
 		if m.mode != ModeNormal {
 			m.mode = ModeNormal
 			m.searchInput.Blur()
-			m.overrideInput.Blur()
 			return m, nil
 		}
 		return m, nil
@@ -289,8 +281,6 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case ModeSearch:
 		return m.handleSearchMode(msg)
-	case ModeOverride:
-		return m.handleOverrideMode(msg)
 	case ModeNewTemplate:
 		return m.handleNewTemplateMode(msg)
 	default:
@@ -302,12 +292,12 @@ func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
 	switch key {
-	// Panel navigation
+	// Panel navigation (3 panels: Templates, Request, Response)
 	case "tab":
-		m.activePanel = (m.activePanel + 1) % 4
+		m.activePanel = (m.activePanel + 1) % 3
 		return m, nil
 	case "shift+tab":
-		m.activePanel = (m.activePanel + 3) % 4 // Wrap backwards
+		m.activePanel = (m.activePanel + 2) % 3 // Wrap backwards
 		return m, nil
 	case "1":
 		m.activePanel = PanelTemplates
@@ -318,9 +308,6 @@ func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "3":
 		m.activePanel = PanelResponse
 		return m, nil
-	case "4":
-		m.activePanel = PanelOverrides
-		return m, nil
 
 	// Search mode
 	case "/":
@@ -328,18 +315,14 @@ func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchInput.Focus()
 		return m, textinput.Blink
 
-	// Override mode
+	// Override mode - open overrides file in editor
 	case "o":
-		if m.activePanel == PanelOverrides || m.selectedTemplate != nil {
-			m.mode = ModeOverride
-			m.overrideInput.Focus()
-			return m, textinput.Blink
-		}
-		return m, nil
+		return m, m.openOverridesInEditor()
 
 	// Clear overrides
 	case "C":
 		m.overrides = make([]config.Override, 0)
+		m.saveOverrides()
 		return m, nil
 
 	// Execute request
@@ -394,8 +377,6 @@ func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleRequestPanelKeys(msg)
 	case PanelResponse:
 		return m.handleResponsePanelKeys(msg)
-	case PanelOverrides:
-		return m.handleOverridesPanelKeys(msg)
 	}
 
 	return m, nil
@@ -472,17 +453,6 @@ func (m Model) handleResponsePanelKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleOverridesPanelKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "d", "backspace":
-		// Delete selected override (simplified - deletes last)
-		if len(m.overrides) > 0 {
-			m.overrides = m.overrides[:len(m.overrides)-1]
-		}
-	}
-	return m, nil
-}
-
 func (m Model) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
@@ -532,29 +502,72 @@ func (m Model) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m Model) handleOverrideMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "enter":
-		// Parse and add override
-		val := m.overrideInput.Value()
-		if val != "" {
-			parts := strings.SplitN(val, ":", 2)
-			if len(parts) == 2 {
-				m.overrides = append(m.overrides, config.Override{
-					Key:   strings.TrimSpace(parts[0]),
-					Value: strings.TrimSpace(parts[1]),
-				})
-			}
-		}
-		m.overrideInput.SetValue("")
-		m.mode = ModeNormal
-		m.overrideInput.Blur()
-		return m, nil
+// overridesFilePath returns the path to the overrides persistence file
+// Stored in ~/.tp/ alongside the templates folder
+func (m Model) overridesFilePath() string {
+	return filepath.Join(config.DefaultDirectory, "overrides.yaml")
+}
+
+// saveOverrides persists the current overrides to disk
+func (m Model) saveOverrides() {
+	data := make(map[string]string)
+	for _, o := range m.overrides {
+		data[o.Key] = o.Value
 	}
 
-	var cmd tea.Cmd
-	m.overrideInput, cmd = m.overrideInput.Update(msg)
-	return m, cmd
+	content, err := yaml.Marshal(data)
+	if err != nil {
+		m.logger.Warnf("failed to marshal overrides: %v", err)
+		return
+	}
+
+	err = os.WriteFile(m.overridesFilePath(), content, 0644)
+	if err != nil {
+		m.logger.Warnf("failed to save overrides: %v", err)
+	}
+}
+
+// loadOverrides loads persisted overrides from disk
+func (m *Model) loadOverrides() {
+	content, err := os.ReadFile(m.overridesFilePath())
+	if err != nil {
+		// File doesn't exist or can't be read - that's fine
+		return
+	}
+
+	data := make(map[string]string)
+	err = yaml.Unmarshal(content, &data)
+	if err != nil {
+		m.logger.Warnf("failed to parse overrides file: %v", err)
+		return
+	}
+
+	m.overrides = make([]config.Override, 0, len(data))
+	for k, v := range data {
+		m.overrides = append(m.overrides, config.Override{Key: k, Value: v})
+	}
+}
+
+// openOverridesInEditor opens the overrides YAML file in the user's editor
+func (m Model) openOverridesInEditor() tea.Cmd {
+	filePath := m.overridesFilePath()
+
+	// Create the file with a helpful header if it doesn't exist
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		header := `# Override variables for tp templates
+# Format: key: value
+# Example:
+#   id: "12345"
+#   name: "test"
+#
+# These values will override any matching variables in your templates.
+`
+		if err := os.WriteFile(filePath, []byte(header), 0644); err != nil {
+			m.logger.Warnf("failed to create overrides file: %v", err)
+		}
+	}
+
+	return m.openEditor(filePath)
 }
 
 func (m Model) handleNewTemplateMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -665,7 +678,9 @@ func (m Model) View() string {
 	// Status bar
 	statusBar := m.renderStatusBar()
 
-	return lipgloss.JoinVertical(lipgloss.Left, mainContent, statusBar)
+	fullView := lipgloss.JoinVertical(lipgloss.Left, mainContent, statusBar)
+
+	return fullView
 }
 
 func (m Model) renderTemplatesPanel(width, height int) string {
@@ -961,8 +976,6 @@ func (m Model) renderStatusBar() string {
 	switch m.mode {
 	case ModeSearch:
 		leftContent = " SEARCH "
-	case ModeOverride:
-		leftContent = " OVERRIDE: " + m.overrideInput.View() + " "
 	case ModeNewTemplate:
 		leftContent = " NEW: " + m.newTemplateInput.View() + " "
 	default:

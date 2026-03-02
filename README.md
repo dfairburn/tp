@@ -9,6 +9,8 @@ GUI-based API dev tools. The driving motivation for tp was to build something th
 * modular and reusable
 * configurable at the point of execution (providing overrides on the command-line for variables that could change frequently)
 
+A companion Vim plugin is available for syntax highlighting and validation of tp templates -- see [Editor Integration](#editor-integration).
+
 ---
 ## Quickstart
 
@@ -46,6 +48,7 @@ This should open up your default configured editor using the `$EDITOR` environme
 url: https://jsonplaceholder.typicode.com/users
 method: GET
 headers:
+  Authorization: Bearer {{ .token }}
 body:
 ```
 
@@ -53,7 +56,7 @@ Once written, a file will have been written to `~/.tp/templates/example.yml` and
 
 #### Notes
 
-* To find out more about the `tp open` subcommand, please see [the tp use command](#tp-use)
+* To find out more about the `tp open` subcommand, please see [the tp open command](#tp-open)
 * To find out more about templates, please see [the templates section](#templates)
 
 ### Executing a template
@@ -92,7 +95,7 @@ This is all well and good, but the whole point of this is to template out these 
 configure and mutate on the fly. So let's add some variables.
 
 Execute the following command to open up the varaibles file in your default editor.
-On first run, this should open up an empty yaml file with the filepath `~/.tp/vars`.
+On first run, this should open up an empty yaml file with the filepath `~/.tp/default.env.yml`.
 
 ```shell
 tp vars
@@ -152,7 +155,8 @@ headers:
   Authorization: Bearer {{ .token }}
 ```
 
-This gets evaluated by your shell (defined by the `$SHELL` env var) on the load of the variable file.
+Shell expansion is evaluated by your shell (defined by the `$SHELL` env var). Variables are lazily expanded -- only
+the variables that the template actually references are evaluated, so expensive commands are not run unnecessarily.
 
 #### Notes on Variables
 
@@ -162,13 +166,14 @@ that have `-` in the name, `A-Za-z`, `0-9` and `_` are valid for variable names.
 ## Subcommands
 #### Global Flags
 
-| Short | Long     | Description                                                                             |
-|-------|----------|-----------------------------------------------------------------------------------------|
-|       | --config | An override for the location of the config file to use (defaults to: ~/.tp/config.yml)  |
-|       | --vars   | An override for the location of the variables file to use (defaults to: ~/.tp/vars.yml) |
-|       | --debug  | Redirects all logging to STDOUT                                                         |
-|       | --log    | An override for the destination of the logfile to be written to                         |
-| -h    | --help   | Displays the help text for the `use` command.                                           |
+| Short | Long      | Description                                                                                       |
+|-------|-----------|---------------------------------------------------------------------------------------------------|
+| -c    | --config  | An override for the location of the config file to use (defaults to: ~/.tp/config.yml)            |
+|       | --envFile | An override for the location of the environment file to use (defaults to: ~/.tp/default.env.yml)  |
+| -e    | --env     | A string dictating which env file to use (defaults to: "default", resolving to ~/.tp/default.yml) |
+| -d    | --debug   | Redirects all logging to STDOUT                                                                   |
+|       | --log     | An override for the destination of the logfile to be written to                                   |
+| -h    | --help    | Displays the help text for the command                                                            |
 
 ### tp use
 `tp use` takes a given template, interpolates the variables defined in the configured variable file, takes
@@ -228,6 +233,18 @@ tp use --overrides user:"1" --overrides content_type:"application/json" --overri
 tp use --overrides user:"1",content_type:"application/json",time:$(time)
 ```
 
+Override values also support `$(command)` shell expansion, just like the variables file:
+
+```shell
+tp use example -o token:$(get-api-token)
+```
+
+**Override Completion:**
+
+Tab completion for the `-o` flag is template-aware. When a template name has been provided, completions are filtered to
+only the variables referenced within that template. If no template is specified, all variables from the environment file
+are suggested.
+
 ### tp open
 
 `tp open` takes a filename as a command and either opens a new template, with the default template syntax, or opens
@@ -236,9 +253,26 @@ an already existing template.
 **Note**
 The default templates directory is `~/.tp/templates`, however you can define your own within the `~/.tp/config.yml` file.
 
-### tp vars
+Flags:
 
-`tp vars` opens the variable file defined in your tp config (default: `~/.tp/config.yml`) in your configured editor. The
+| Short | Long      | Description                                                         |
+|-------|-----------|---------------------------------------------------------------------|
+| -g    | --graphql | Create a GraphQL template instead of a standard HTTP template       |
+| -h    | --help    | Displays the help text for the `open` command.                      |
+
+**GraphQL Templates**
+
+To create a GraphQL template, use the `--graphql` flag:
+
+```shell
+tp open --graphql my-query
+```
+
+This creates a template with the GraphQL structure (`query`, `variables`) instead of the standard HTTP structure (`method`, `body`). See [GraphQL Templates](#graphql-templates) for more details.
+
+### tp env
+
+`tp env` opens the environment file defined in your tp config (default: `~/.tp/default.env.yml`) in your configured editor. The
 editor is chosen based on what your `$EDITOR` environment variable is set to
 
 **Note**
@@ -318,18 +352,22 @@ and source this file from your PowerShell profile.
 ### tp config
 
 `tp config` loads the config file defined at `~/.tp/config.yml`. This is where the default locations for
-your templates directory and variables file are stored. The default `~/.tp/config.yml` looks as follows:
+your templates directory and environment file are stored. The default `~/.tp/config.yml` looks as follows:
 
 ```yaml
 ---
 
-variableDefinitionFile: "~/.tp/vars.yml"
+environmentFile: "~/.tp/default.env.yml"
 templatesDirectoryPath: "~/.tp/templates"
 ```
 
 ### Templates
 
-tp has the notion of "templates", which are yaml files that hold data to construct HTTP requests. The template structure is as follows:
+tp has the notion of "templates", which are yaml files that hold data to construct HTTP requests. There are two types of templates: standard HTTP templates and GraphQL templates.
+
+#### HTTP Templates
+
+The standard HTTP template structure is as follows:
 
 ```yaml
 # optional descriptions of template vars which will be included in the help output
@@ -344,6 +382,48 @@ headers:
 # the data body to be sent with the HTTP request
 body:
 ```
+
+#### GraphQL Templates
+
+GraphQL templates use `query` and `variables` fields instead of `method` and `body`. Create one with `tp open --graphql`:
+
+```yaml
+# the target url of the GraphQL endpoint
+url:
+# a map of any additional headers to be sent with the request
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{ .token }}
+# the GraphQL query or mutation (use | for block scalar)
+query: |
+# a map of variables to pass with the GraphQL request
+variables:
+```
+
+When a template has a `query` field, tp automatically:
+- Sets the HTTP method to `POST` (unless explicitly overridden)
+- Sets the `Content-Type` header to `application/json` (unless explicitly set)
+- Wraps the query and variables into a JSON body for the request
+
+**GraphQL Example:**
+
+```yaml
+url: https://api.example.com/graphql
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{ .token }}
+query: |
+  query GetUser($id: ID!) {
+    user(id: $id) {
+      name
+      email
+    }
+  }
+variables:
+  id: {{ .user_id }}
+```
+
+#### Template Syntax
 
 Templates are made using [Go's template package](https://pkg.go.dev/text/template). As you can see from the example below, 
 there are some [variables](#variables) that are captured within curly braces. Variables are defined in yaml files that are given as 
@@ -433,7 +513,19 @@ Example Usage from CLI:
 tp use query -o start:-1h -o end:now
 ```
 
-
-
-
 ### Config
+
+The config file is located at `~/.tp/config.yml` and controls the default locations for your templates directory and
+environment file. See [tp config](#tp-config) for more details.
+
+### Editor Integration
+
+#### Vim
+
+A Vim plugin is available at [dfairburn/tp-vim](https://github.com/dfairburn/tp-vim) that provides:
+
+- **Filetype detection** -- automatically detects tp templates based on your configured templates directory
+- **Syntax highlighting** -- YAML-like structure highlighting, embedded JSON in `body` sections, embedded GraphQL in `query` sections, and Go template `{{ }}` expression highlighting throughout
+- **`:TpValidate` command** -- validates the JSON in your `body` section using `jq` or `python3`, with errors reported in the quickfix list
+
+See the [tp-vim repository](https://github.com/dfairburn/tp-vim) for installation instructions.

@@ -251,7 +251,7 @@ If your `$EDITOR` env var is not set, the default editor will be `vim`
 
 ### tp tui
 
-`tp tui` launches an interactive terminal user interface for managing and executing HTTP request templates. It provides a Postman-like experience directly in your terminal.
+`tp tui` launches an interactive terminal user interface for managing and executing HTTP request templates.
 
 **Features:**
 - Template browser with folder navigation

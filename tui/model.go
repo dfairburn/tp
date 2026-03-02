@@ -511,64 +511,24 @@ func (m Model) handleResponsePanelKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Calculate page size for page up/down (same as template panel, minus search bar)
-	listHeight := m.height - 6
-	listHeight -= 3 // search bar
-	pageSize := max(1, listHeight-1)
-
 	switch msg.String() {
-	case "enter":
-		// Get the currently highlighted item before clearing search
-		currentItem := m.templates.Current()
-
-		if currentItem != nil {
-			// Clear search and focus on this item in the full list
-			m.templates.ClearSearchAndFocus(currentItem)
-			m.searchInput.SetValue("")
-
-			// If it's a file, select it
-			if !currentItem.IsDir {
-				m.selectedTemplate = currentItem
-				m.templates.selectedItem = currentItem
-				m.requestViewport.SetContent(m.renderRequestDetails())
-				m.requestViewport.GotoTop()
-				// Load cached response if available
-				if cached, ok := m.responseCache[currentItem.AbsolutePath]; ok {
-					m.response = cached
-				} else {
-					m.response = nil
-				}
-				m.responseViewport.SetContent(m.renderResponseBody())
-				m.responseViewport.GotoTop()
-			}
-			// If it's a folder, it's now expanded and focused
-		} else {
-			// No item selected, just clear the search
-			m.templates.Filter("")
-			m.searchInput.SetValue("")
-		}
-
+	case "enter", "down", "up":
+		// Lock in the filter and return to normal mode
 		m.mode = ModeNormal
 		m.searchInput.Blur()
+		// If up/down, also move in that direction
+		if msg.String() == "down" {
+			m.templates.MoveDown()
+		} else if msg.String() == "up" {
+			m.templates.MoveUp()
+		}
 		return m, nil
 	case "esc":
-		// Cancel search without selecting - restore full list
+		// Cancel filter and return to normal mode
 		m.templates.Filter("")
 		m.searchInput.SetValue("")
 		m.mode = ModeNormal
 		m.searchInput.Blur()
-		return m, nil
-	case "up", "ctrl+p":
-		m.templates.MoveUp()
-		return m, nil
-	case "down", "ctrl+n":
-		m.templates.MoveDown()
-		return m, nil
-	case "ctrl+d", "pgdown":
-		m.templates.PageDown(pageSize)
-		return m, nil
-	case "ctrl+u", "pgup":
-		m.templates.PageUp(pageSize)
 		return m, nil
 	}
 

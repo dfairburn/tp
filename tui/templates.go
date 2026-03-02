@@ -361,3 +361,13 @@ func (tl *TemplateList) ClearSearchAndFocus(item *TemplateItem) {
 		}
 	}
 }
+
+// FindByPath finds a template item by its absolute path
+func (tl *TemplateList) FindByPath(absPath string) *TemplateItem {
+	for _, item := range tl.flatItems {
+		if item.AbsolutePath == absPath {
+			return item
+		}
+	}
+	return nil
+}

@@ -2,7 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/formatters"
+	"github.com/alecthomas/chroma/v2/lexers"
+	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -246,4 +252,78 @@ func renderStatusCode(code int) string {
 		style = lipgloss.NewStyle().Foreground(accentColor).Bold(true)
 	}
 	return style.Render(fmt.Sprintf("%d", code))
+}
+
+// highlightCode applies syntax highlighting to code using chroma.
+// It automatically detects the language from the provided lexer name.
+// Supported lexers: "json", "graphql", "xml", "html", "yaml", etc.
+func highlightCode(input string, lexerName string) string {
+	lexer := lexers.Get(lexerName)
+	if lexer == nil {
+		lexer = lexers.Fallback
+	}
+	lexer = chroma.Coalesce(lexer)
+
+	// Use terminal256 formatter for ANSI output
+	formatter := formatters.Get("terminal256")
+	if formatter == nil {
+		formatter = formatters.Fallback
+	}
+
+	// Use a style that works well in terminals
+	style := styles.Get("monokai")
+	if style == nil {
+		style = styles.Fallback
+	}
+
+	iterator, err := lexer.Tokenise(nil, input)
+	if err != nil {
+		return input
+	}
+
+	var buf strings.Builder
+	err = formatter.Format(&buf, style, iterator)
+	if err != nil {
+		return input
+	}
+
+	return buf.String()
+}
+
+// getLexerForContentType returns the appropriate chroma lexer name
+// based on the HTTP Content-Type header.
+func getLexerForContentType(contentType string) string {
+	ct := strings.ToLower(contentType)
+	switch {
+	case strings.Contains(ct, "application/json"):
+		return "json"
+	case strings.Contains(ct, "application/graphql"):
+		return "graphql"
+	case strings.Contains(ct, "application/xml"), strings.Contains(ct, "text/xml"):
+		return "xml"
+	case strings.Contains(ct, "text/html"):
+		return "html"
+	case strings.Contains(ct, "text/yaml"), strings.Contains(ct, "application/yaml"),
+		strings.Contains(ct, "application/x-yaml"):
+		return "yaml"
+	default:
+		return ""
+	}
+}
+
+// templateTagRegex matches Go template tags
+var templateTagRegex = regexp.MustCompile(`\{\{.*?\}\}`)
+
+// highlightCodeWithTemplates applies syntax highlighting to code that may contain
+// Go template tags ({{ ... }}). When template tags are present, it uses the
+// Go Template lexer. Otherwise, it uses the specified content-type lexer.
+func highlightCodeWithTemplates(input string, lexerName string) string {
+	// Check if the input contains template tags
+	if templateTagRegex.MatchString(input) {
+		// Use Go Template lexer for content with template tags
+		return highlightCode(input, "go-template")
+	}
+
+	// No template tags, use the content-type specific lexer
+	return highlightCode(input, lexerName)
 }

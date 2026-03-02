@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -54,7 +55,8 @@ type templatesLoadedMsg struct {
 }
 
 type requestCompleteMsg struct {
-	result *RequestResult
+	result       *RequestResult
+	templatePath string
 }
 
 type editorFinishedMsg struct {
@@ -83,8 +85,9 @@ type Model struct {
 	requestTab       Tab
 
 	// Response
-	response    *RequestResult
-	responseTab Tab
+	response      *RequestResult
+	responseTab   Tab
+	responseCache map[string]*RequestResult // Cache responses by template path
 
 	// Viewports for scrollable content
 	requestViewport  viewport.Model
@@ -97,9 +100,10 @@ type Model struct {
 	overrides []config.Override
 
 	// State
-	loading bool
-	spinner spinner.Model
-	err     error
+	loading                 bool
+	spinner                 spinner.Model
+	err                     error
+	pendingSelectedTemplate string // Template path to restore after templates load
 
 	// New template input
 	newTemplateInput textinput.Model
@@ -154,12 +158,16 @@ func New(logger *logging.Logger, cfg config.Config, envFile string) Model {
 		searchInput:      searchInput,
 		newTemplateInput: newTemplateInput,
 		overrides:        make([]config.Override, 0),
+		responseCache:    make(map[string]*RequestResult),
 		spinner:          s,
 		showHelp:         true,
 	}
 
 	// Load persisted overrides
 	m.loadOverrides()
+
+	// Load persisted response cache
+	m.loadCache()
 
 	return m
 }
@@ -196,11 +204,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 		}
+		// Restore selected template from cache
+		if m.pendingSelectedTemplate != "" {
+			item := m.templates.FindByPath(m.pendingSelectedTemplate)
+			if item != nil {
+				m.selectedTemplate = item
+				m.templates.selectedItem = item
+				// Position cursor on the item (expands parent folders if needed)
+				m.templates.ClearSearchAndFocus(item)
+				m.requestViewport.SetContent(m.renderRequestDetails())
+				// Load cached response if available
+				if cached, ok := m.responseCache[m.pendingSelectedTemplate]; ok {
+					m.response = cached
+					m.responseViewport.SetContent(m.renderResponseBody())
+				}
+			}
+			m.pendingSelectedTemplate = ""
+		}
 		return m, nil
 
 	case requestCompleteMsg:
 		m.loading = false
 		m.response = msg.result
+		// Cache the response for this template
+		if msg.templatePath != "" {
+			m.responseCache[msg.templatePath] = msg.result
+		}
 		m.responseViewport.SetContent(m.renderResponseBody())
 		m.responseViewport.GotoTop()
 		return m, nil
@@ -266,6 +295,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "ctrl+c", "q":
 		if m.mode == ModeNormal {
+			m.saveCache()
 			return m, tea.Quit
 		}
 		// Exit current mode
@@ -338,6 +368,14 @@ func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.selectedTemplate = selected
 				m.requestViewport.SetContent(m.renderRequestDetails())
 				m.requestViewport.GotoTop()
+				// Load cached response if available
+				if cached, ok := m.responseCache[selected.AbsolutePath]; ok {
+					m.response = cached
+				} else {
+					m.response = nil
+				}
+				m.responseViewport.SetContent(m.renderResponseBody())
+				m.responseViewport.GotoTop()
 			}
 			return m, nil
 		}
@@ -489,6 +527,14 @@ func (m Model) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.templates.selectedItem = currentItem
 				m.requestViewport.SetContent(m.renderRequestDetails())
 				m.requestViewport.GotoTop()
+				// Load cached response if available
+				if cached, ok := m.responseCache[currentItem.AbsolutePath]; ok {
+					m.response = cached
+				} else {
+					m.response = nil
+				}
+				m.responseViewport.SetContent(m.renderResponseBody())
+				m.responseViewport.GotoTop()
 			}
 			// If it's a folder, it's now expanded and focused
 		} else {
@@ -564,6 +610,122 @@ func (m *Model) loadOverrides() {
 	m.overrides = make([]config.Override, 0, len(data))
 	for k, v := range data {
 		m.overrides = append(m.overrides, config.Override{Key: k, Value: v})
+	}
+}
+
+// CachedResponse is a JSON-serializable version of RequestResult
+type CachedResponse struct {
+	StatusCode  int               `json:"status_code"`
+	Status      string            `json:"status"`
+	Headers     map[string]string `json:"headers"`
+	Body        string            `json:"body"`
+	DurationMs  int64             `json:"duration_ms"`
+	ContentType string            `json:"content_type"`
+	Size        int               `json:"size"`
+	Request     *RequestInfo      `json:"request,omitempty"`
+	Error       string            `json:"error,omitempty"`
+}
+
+// SessionCache is the top-level structure for the cache file
+type SessionCache struct {
+	SelectedTemplate string                     `json:"selected_template,omitempty"`
+	Responses        map[string]*CachedResponse `json:"responses,omitempty"`
+}
+
+// sessionCacheFilePath returns the path to the session cache file
+func (m Model) sessionCacheFilePath() string {
+	return filepath.Join(config.DefaultDirectory, "session.json")
+}
+
+// saveCache persists the response cache and selected template to disk
+func (m Model) saveCache() {
+	session := SessionCache{
+		Responses: make(map[string]*CachedResponse),
+	}
+
+	if m.selectedTemplate != nil {
+		session.SelectedTemplate = m.selectedTemplate.AbsolutePath
+	}
+
+	for path, result := range m.responseCache {
+		if result == nil {
+			continue
+		}
+		cached := &CachedResponse{
+			StatusCode:  result.StatusCode,
+			Status:      result.Status,
+			Body:        result.Body,
+			DurationMs:  result.Duration.Milliseconds(),
+			ContentType: result.ContentType,
+			Size:        result.Size,
+			Request:     result.Request,
+		}
+		if result.Error != nil {
+			cached.Error = result.Error.Error()
+		}
+		if result.Headers != nil {
+			cached.Headers = make(map[string]string)
+			for k, v := range result.Headers {
+				if len(v) > 0 {
+					cached.Headers[k] = v[0]
+				}
+			}
+		}
+		session.Responses[path] = cached
+	}
+
+	content, err := json.MarshalIndent(session, "", "  ")
+	if err != nil {
+		m.logger.Warnf("failed to marshal session cache: %v", err)
+		return
+	}
+
+	err = os.WriteFile(m.sessionCacheFilePath(), content, 0644)
+	if err != nil {
+		m.logger.Warnf("failed to save session cache: %v", err)
+	}
+}
+
+// loadCache loads the response cache and selected template path from disk
+// Note: selected template is restored later after templates are loaded
+func (m *Model) loadCache() {
+	content, err := os.ReadFile(m.sessionCacheFilePath())
+	if err != nil {
+		// File doesn't exist or can't be read - that's fine
+		return
+	}
+
+	var session SessionCache
+	err = json.Unmarshal(content, &session)
+	if err != nil {
+		m.logger.Warnf("failed to parse session cache: %v", err)
+		return
+	}
+
+	// Store the selected template path for later restoration
+	m.pendingSelectedTemplate = session.SelectedTemplate
+
+	m.responseCache = make(map[string]*RequestResult)
+	for path, cached := range session.Responses {
+		result := &RequestResult{
+			StatusCode:  cached.StatusCode,
+			Status:      cached.Status,
+			Body:        cached.Body,
+			Duration:    time.Duration(cached.DurationMs) * time.Millisecond,
+			ContentType: cached.ContentType,
+			Size:        cached.Size,
+			Request:     cached.Request,
+		}
+		if cached.Error != "" {
+			result.Error = fmt.Errorf("%s", cached.Error)
+		}
+		if cached.Headers != nil {
+			result.Headers = make(map[string][]string)
+			for k, v := range cached.Headers {
+				result.Headers[k] = []string{v}
+			}
+		}
+		m.responseCache[path] = result
 	}
 }
 
@@ -648,7 +810,7 @@ func (m Model) executeRequest() tea.Msg {
 	}
 
 	result := ExecuteRequest(m.logger, m.selectedTemplate.AbsolutePath, m.vars, m.overrides)
-	return requestCompleteMsg{result: result}
+	return requestCompleteMsg{result: result, templatePath: m.selectedTemplate.AbsolutePath}
 }
 
 func (m *Model) updateViewportSizes() {
@@ -907,7 +1069,17 @@ func (m Model) renderRequestDetails() string {
 		if m.selectedTemplate.Body == "" {
 			content.WriteString(mutedStyle.Render("No body defined"))
 		} else {
-			content.WriteString(m.selectedTemplate.Body)
+			// Try to detect content type from headers for syntax highlighting
+			lexer := ""
+			if ct, ok := m.selectedTemplate.Headers["Content-Type"]; ok {
+				lexer = getLexerForContentType(ct)
+			}
+			if lexer != "" {
+				// Use template-aware highlighting since request bodies may contain Go template tags
+				content.WriteString(highlightCodeWithTemplates(m.selectedTemplate.Body, lexer))
+			} else {
+				content.WriteString(m.selectedTemplate.Body)
+			}
 		}
 	case TabParams:
 		// Show template variables/descriptions
@@ -989,6 +1161,10 @@ func (m Model) renderResponseBody() string {
 		}
 		return content.String()
 	case TabBody:
+		lexer := getLexerForContentType(m.response.ContentType)
+		if lexer != "" {
+			return highlightCode(m.response.Body, lexer)
+		}
 		return m.response.Body
 	}
 

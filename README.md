@@ -278,9 +278,9 @@ tp tui
 | `enter` | Select template / expand folder |
 | `space` | Toggle folder expansion |
 | `x` | Execute selected request |
+| `y` | Copy response body to clipboard |
 | `/` | Search templates |
 | `o` | Edit overrides file in `$EDITOR` |
-| `C` | Clear all overrides |
 | `r` | Refresh template list |
 | `e` | Edit selected template in `$EDITOR` |
 | `n` | Create new template |
@@ -300,7 +300,7 @@ id: "12345"
 name: "test"
 ```
 
-These values will override any matching variables in your templates. When you save and close the editor, overrides are automatically reloaded. Press `C` to clear all overrides.
+These values will override any matching variables in your templates. When you save and close the editor, overrides are automatically reloaded.
 
 ### tp completion
 

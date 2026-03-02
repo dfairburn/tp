@@ -6,7 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -59,6 +61,8 @@ type editorFinishedMsg struct {
 	err error
 }
 
+type clearStatusMsg struct{}
+
 // Model is the main TUI model
 type Model struct {
 	// Config
@@ -106,6 +110,9 @@ type Model struct {
 
 	// Help visibility
 	showHelp bool
+
+	// Status message (temporary feedback)
+	statusMsg string
 }
 
 // New creates a new TUI model
@@ -216,6 +223,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+
+	case clearStatusMsg:
+		m.statusMsg = ""
+		return m, nil
 	}
 
 	// Update sub-components
@@ -319,12 +330,6 @@ func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "o":
 		return m, m.openOverridesInEditor()
 
-	// Clear overrides
-	case "C":
-		m.overrides = make([]config.Override, 0)
-		m.saveOverrides()
-		return m, nil
-
 	// Execute request
 	case "enter":
 		if m.activePanel == PanelTemplates {
@@ -367,6 +372,20 @@ func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.newTemplateInput.SetValue("")
 		m.newTemplateInput.Focus()
 		return m, textinput.Blink
+
+	// Copy response to clipboard
+	case "y":
+		if m.response != nil && m.response.Body != "" {
+			err := clipboard.WriteAll(m.response.Body)
+			if err != nil {
+				m.statusMsg = "Failed to copy: " + err.Error()
+			} else {
+				m.statusMsg = "Copied response to clipboard"
+			}
+		} else {
+			m.statusMsg = "No response to copy"
+		}
+		return m, m.clearStatusAfterDelay()
 	}
 
 	// Panel-specific keys
@@ -614,6 +633,12 @@ func (m Model) openEditor(filePath string) tea.Cmd {
 	c := exec.Command(editor, filePath)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return editorFinishedMsg{err: err}
+	})
+}
+
+func (m Model) clearStatusAfterDelay() tea.Cmd {
+	return tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+		return clearStatusMsg{}
 	})
 }
 
@@ -982,17 +1007,19 @@ func (m Model) renderStatusBar() string {
 		leftContent = " NORMAL "
 	}
 
-	// Middle - overrides count
-	overridesCount := ""
-	if len(m.overrides) > 0 {
-		overridesCount = fmt.Sprintf(" | Overrides: %d ", len(m.overrides))
+	// Middle - status message or overrides count
+	middleContent := ""
+	if m.statusMsg != "" {
+		middleContent = " " + m.statusMsg + " "
+	} else if len(m.overrides) > 0 {
+		middleContent = fmt.Sprintf(" | Overrides: %d ", len(m.overrides))
 		for _, o := range m.overrides {
-			overridesCount += fmt.Sprintf("[%s=%s] ", o.Key, truncate(o.Value, 10))
+			middleContent += fmt.Sprintf("[%s=%s] ", o.Key, truncate(o.Value, 10))
 		}
 	}
 
 	// Right side - help
-	help := " q:quit  /:search  x:send  o:override  e:edit  n:new  ?:help "
+	help := " q:quit  /:search  x:send  y:copy  o:override  e:edit  n:new  ?:help "
 	if !m.showHelp {
 		help = " ?:help "
 	}
@@ -1006,7 +1033,7 @@ func (m Model) renderStatusBar() string {
 		middleWidth = 0
 	}
 
-	middle := fmt.Sprintf("%-*s", middleWidth, overridesCount)
+	middle := fmt.Sprintf("%-*s", middleWidth, middleContent)
 
 	return statusBarStyle.Render(leftContent + middle + help)
 }

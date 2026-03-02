@@ -511,6 +511,11 @@ func (m Model) handleResponsePanelKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Calculate page size for page up/down (same as template panel, minus search bar)
+	listHeight := m.height - 6
+	listHeight -= 3 // search bar
+	pageSize := max(1, listHeight-1)
+
 	switch msg.String() {
 	case "enter":
 		// Get the currently highlighted item before clearing search
@@ -558,6 +563,12 @@ func (m Model) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "down", "ctrl+n":
 		m.templates.MoveDown()
+		return m, nil
+	case "ctrl+d", "pgdown":
+		m.templates.PageDown(pageSize)
+		return m, nil
+	case "ctrl+u", "pgup":
+		m.templates.PageUp(pageSize)
 		return m, nil
 	}
 

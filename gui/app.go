@@ -89,6 +89,7 @@ type TemplateItem struct {
 // TemplateResponse represents the parsed template details
 type TemplateResponse struct {
 	Name         string            `json:"name"`
+	AbsolutePath string            `json:"absolutePath"`
 	Method       string            `json:"method"`
 	URL          string            `json:"url"`
 	Headers      map[string]string `json:"headers"`
@@ -108,20 +109,56 @@ type HTTPResponse struct {
 	Error       string            `json:"error,omitempty"`
 }
 
+// PreviewResponse holds the rendered template fields without making an HTTP request
+type PreviewResponse struct {
+	URL     string            `json:"url"`
+	Body    string            `json:"body"`
+	Headers map[string]string `json:"headers"`
+	Error   string            `json:"error,omitempty"`
+}
+
 // ConfigInfo returns information about the current configuration
 type ConfigInfo struct {
-	ConfigPath      string `json:"configPath"`
-	TemplatesDir    string `json:"templatesDir"`
-	EnvironmentFile string `json:"environmentFile"`
+	ConfigPath             string `json:"configPath"`
+	TemplatesDir           string `json:"templatesDir"`
+	TemplatesDirectoryPath string `json:"templatesDirectoryPath"`
+	EnvironmentFile        string `json:"environmentFile"`
 }
 
 // GetConfig returns the current configuration
 func (a *App) GetConfig() ConfigInfo {
 	return ConfigInfo{
-		ConfigPath:      a.configPath,
-		TemplatesDir:    a.templatesDir,
-		EnvironmentFile: a.config.EnvironmentFile,
+		ConfigPath:             a.configPath,
+		TemplatesDir:           a.templatesDir,
+		TemplatesDirectoryPath: a.config.TemplatesDirectoryPath,
+		EnvironmentFile:        a.config.EnvironmentFile,
 	}
+}
+
+// SaveConfig writes updated configuration fields to the config file
+func (a *App) SaveConfig(environmentFile, templatesDirectoryPath string) error {
+	configPath := a.configPath
+	if configPath == "" {
+		configPath = paths.Expand("~/.tp/config.yml")
+	}
+	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+		return err
+	}
+	cfg := config.Config{
+		EnvironmentFile:        environmentFile,
+		TemplatesDirectoryPath: templatesDirectoryPath,
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		return err
+	}
+	a.configPath = configPath
+	a.config = cfg
+	a.templatesDir = paths.Expand(templatesDirectoryPath)
+	return nil
 }
 
 // GetTemplates returns all templates as a tree structure
@@ -248,6 +285,7 @@ func (a *App) GetTemplate(absolutePath string) (*TemplateResponse, error) {
 
 	return &TemplateResponse{
 		Name:         filepath.Base(absolutePath),
+		AbsolutePath: absolutePath,
 		Method:       method,
 		URL:          tmpl.Url,
 		Headers:      tmpl.Headers,
@@ -602,6 +640,67 @@ func (a *App) OpenOverridesFile() error {
 	}
 
 	return a.OpenInEditor(overridesPath)
+}
+
+// PreviewTemplate renders a template with overrides applied but without making an HTTP request
+func (a *App) PreviewTemplate(absolutePath string, runtimeOverrides map[string]string) PreviewResponse {
+	fileOverrides, err := a.GetOverrides()
+	if err != nil {
+		a.logger.Warnf("Error loading overrides: %v", err)
+		fileOverrides = make(map[string]string)
+	}
+
+	mergedOverrides := make(map[string]string)
+	for k, v := range fileOverrides {
+		mergedOverrides[k] = v
+	}
+	for k, v := range runtimeOverrides {
+		mergedOverrides[k] = v
+	}
+
+	var configOverrides config.Overrides
+	for k, v := range mergedOverrides {
+		configOverrides = append(configOverrides, config.Override{Key: k, Value: v})
+	}
+
+	tmpl, err := handlers.RenderTemplate(a.logger, absolutePath, a.vars, configOverrides)
+	if err != nil {
+		return PreviewResponse{Error: err.Error()}
+	}
+
+	return PreviewResponse{
+		URL:     strings.TrimSpace(tmpl.Url),
+		Body:    strings.TrimSpace(tmpl.Body),
+		Headers: tmpl.Headers,
+	}
+}
+
+// PreviewBody renders a raw body string with overrides applied, without reading from a file
+func (a *App) PreviewBody(rawBody string, runtimeOverrides map[string]string) PreviewResponse {
+	fileOverrides, err := a.GetOverrides()
+	if err != nil {
+		a.logger.Warnf("Error loading overrides: %v", err)
+		fileOverrides = make(map[string]string)
+	}
+
+	mergedOverrides := make(map[string]string)
+	for k, v := range fileOverrides {
+		mergedOverrides[k] = v
+	}
+	for k, v := range runtimeOverrides {
+		mergedOverrides[k] = v
+	}
+
+	var configOverrides config.Overrides
+	for k, v := range mergedOverrides {
+		configOverrides = append(configOverrides, config.Override{Key: k, Value: v})
+	}
+
+	rendered, err := handlers.RenderBodyString(a.logger, rawBody, a.vars, configOverrides)
+	if err != nil {
+		return PreviewResponse{Body: rendered, Error: err.Error()}
+	}
+	return PreviewResponse{Body: strings.TrimSpace(rendered)}
 }
 
 // ExecuteTemplateWithOverrides executes a template with both env vars and file-based overrides

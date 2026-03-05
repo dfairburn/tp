@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   expandedDirs: 'tp-gui-expanded-dirs',
   responseCache: 'tp-gui-response-cache',
   theme: 'tp-gui-theme',
+  paramValuesCache: 'tp-gui-param-values',
 };
 
 // Helper to safely parse JSON from localStorage
@@ -49,16 +50,17 @@ export const responseCache = writable<Record<string, main.HTTPResponse>>(
 
 // UI state
 export const activePanel = writable<'templates' | 'request' | 'response'>('templates');
-export const requestTab = writable<'headers' | 'body' | 'params'>('body');
+export const requestTab = writable<'headers' | 'body'>('body');
 export const responseTab = writable<'body' | 'headers'>('body');
 export const theme = writable<'dark' | 'light'>(loadFromStorage(STORAGE_KEYS.theme, 'dark'));
 
 // Variables/overrides for the current request
 export const overrides = writable<Record<string, string>>({});
 
-// Template editor modal state
-export const showTemplateEditor = writable<boolean>(false);
-export const editorTemplateItem = writable<main.TemplateItem | null>(null);
+// Per-template param value cache: templatePath -> { varName -> value }
+export const paramValuesCache = writable<Record<string, Record<string, string>>>(
+  loadFromStorage(STORAGE_KEYS.paramValuesCache, {})
+);
 
 // Persist selected template path
 selectedTemplatePath.subscribe(value => {
@@ -87,10 +89,18 @@ responseCache.subscribe(value => {
   }
 });
 
-// When selected template changes, update path and load cached response
+// Persist param values cache
+paramValuesCache.subscribe(value => {
+  saveToStorage(STORAGE_KEYS.paramValuesCache, value);
+});
+
+// When selected template changes, update path, restore param values, and load cached response
 selectedTemplate.subscribe(template => {
   if (template && !template.isDir) {
     selectedTemplatePath.set(template.absolutePath);
+    // Restore cached param values for this template
+    const pvc = get(paramValuesCache);
+    overrides.set(pvc[template.absolutePath] || {});
     // Load cached response if available
     const cache = get(responseCache);
     if (cache[template.absolutePath]) {
@@ -186,8 +196,3 @@ export function toggleDirectory(path: string) {
   });
 }
 
-// Helper to open template editor
-export function openTemplateEditor(item: main.TemplateItem | null = null) {
-  editorTemplateItem.set(item);
-  showTemplateEditor.set(true);
-}

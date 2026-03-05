@@ -1,19 +1,25 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { 
-    GetVariables, 
-    RefreshVariables, 
+  import { theme } from '../stores/app';
+  import {
+    GetVariables,
+    RefreshVariables,
     GetEnvironmentFilePath,
     OpenEnvironmentFile,
     GetOverrides,
     OpenOverridesFile,
-    SaveOverrides
+    SaveOverrides,
+    GetConfig,
+    SaveConfig,
   } from '../../../wailsjs/go/main/App';
 
   export let isOpen = false;
 
   const dispatch = createEventDispatcher();
 
+  let settingsTab: 'variables' | 'config' = 'variables';
+
+  // Variables tab state
   let variables: Record<string, any> = {};
   let overrides: Record<string, string> = {};
   let mergedVariables: Record<string, { value: any; source: 'env' | 'override' }> = {};
@@ -21,12 +27,19 @@
   let isRefreshing = false;
   let isSaving = false;
   let statusMessage = '';
-  
+
   // Inline editing state
   let editingKey: string | null = null;
   let editValue = '';
   let newKey = '';
   let newValue = '';
+
+  // Config tab state
+  let editTemplatesDir = '';
+  let editEnvFile = '';
+  let configFilePath = '';
+  let isSavingConfig = false;
+  let configSaveError = '';
 
   $: if (isOpen) {
     loadData();
@@ -34,18 +47,36 @@
 
   async function loadData() {
     try {
-      const [vars, ovr, path] = await Promise.all([
+      const [vars, ovr, path, cfg] = await Promise.all([
         GetVariables(),
         GetOverrides(),
-        GetEnvironmentFilePath()
+        GetEnvironmentFilePath(),
+        GetConfig(),
       ]);
       variables = vars || {};
       overrides = ovr || {};
       envFilePath = path;
       mergeVariables();
+      configFilePath = cfg.configPath || '';
+      editTemplatesDir = cfg.templatesDirectoryPath || '';
+      editEnvFile = cfg.environmentFile || '';
     } catch (err) {
       console.error('Failed to load variables:', err);
       statusMessage = `Error loading: ${err}`;
+    }
+  }
+
+  async function saveConfig() {
+    isSavingConfig = true;
+    configSaveError = '';
+    try {
+      await SaveConfig(editEnvFile, editTemplatesDir);
+      statusMessage = 'Config saved';
+      setTimeout(() => statusMessage = '', 2000);
+    } catch (err) {
+      configSaveError = String(err);
+    } finally {
+      isSavingConfig = false;
     }
   }
 
@@ -185,78 +216,140 @@
   <div class="overlay" on:click={close} on:keydown={handleKeydown}>
     <div class="modal" on:click|stopPropagation>
       <div class="modal-header">
-        <h2>Variables</h2>
+        <h2>Settings</h2>
         <button class="close-btn" on:click={close}>✕</button>
       </div>
 
+      <div class="modal-tabs">
+        <button class="tab-btn" class:active={settingsTab === 'variables'} on:click={() => settingsTab = 'variables'}>Variables</button>
+        <button class="tab-btn" class:active={settingsTab === 'config'} on:click={() => settingsTab = 'config'}>Config</button>
+      </div>
+
       <div class="modal-content">
-        <div class="toolbar">
-          <div class="actions">
-            <button class="btn" on:click={refreshVariables} disabled={isRefreshing}>
-              {isRefreshing ? '⏳' : '⟳'} Refresh
-            </button>
-            <button class="btn secondary" on:click={openEnvFile} title="Edit environment variables">
-              ✎ Env
-            </button>
-            <button class="btn secondary" on:click={openOverridesFile} title="Edit overrides file">
-              ✎ Overrides
+
+        {#if settingsTab === 'variables'}
+          <div class="toolbar">
+            <div class="actions">
+              <button class="btn" on:click={refreshVariables} disabled={isRefreshing}>
+                {isRefreshing ? '⏳' : '⟳'} Refresh
+              </button>
+              <button class="btn secondary" on:click={openEnvFile} title="Edit environment variables">
+                ✎ Env
+              </button>
+              <button class="btn secondary" on:click={openOverridesFile} title="Edit overrides file">
+                ✎ Overrides
+              </button>
+            </div>
+          </div>
+
+          <div class="variables-list">
+            {#each Object.entries(mergedVariables) as [key, { value, source }]}
+              <div class="variable-row">
+                <span class="var-key">{key}</span>
+
+                {#if editingKey === key}
+                  <input
+                    class="var-input"
+                    bind:value={editValue}
+                    on:keydown={handleKeydown}
+                    autofocus
+                  />
+                  <button class="icon-btn save" on:click={saveEdit} title="Save">✓</button>
+                  <button class="icon-btn cancel" on:click={cancelEdit} title="Cancel">✕</button>
+                {:else}
+                  <span class="var-value" title={String(value)}>{formatValue(value)}</span>
+                  <span class="var-source" class:override={source === 'override'}>
+                    {source === 'override' ? 'override' : 'env'}
+                  </span>
+                  {#if source === 'override'}
+                    <button class="icon-btn edit" on:click={() => startEdit(key, value)} title="Edit">✎</button>
+                    <button class="icon-btn delete" on:click={() => removeOverride(key)} title="Remove">✕</button>
+                  {/if}
+                {/if}
+              </div>
+            {:else}
+              <p class="empty">No variables loaded</p>
+            {/each}
+          </div>
+
+          <div class="add-override">
+            <input
+              class="add-input key"
+              placeholder="Key"
+              bind:value={newKey}
+              on:keydown={(e) => e.key === 'Enter' && addOverride()}
+            />
+            <input
+              class="add-input value"
+              placeholder="Value"
+              bind:value={newValue}
+              on:keydown={(e) => e.key === 'Enter' && addOverride()}
+            />
+            <button class="btn small" on:click={addOverride} disabled={!newKey.trim()}>
+              + Add Override
             </button>
           </div>
-        </div>
 
-        <div class="variables-list">
-          {#each Object.entries(mergedVariables) as [key, { value, source }]}
-            <div class="variable-row">
-              <span class="var-key">{key}</span>
-              
-              {#if editingKey === key}
-                <input 
-                  class="var-input"
-                  bind:value={editValue}
-                  on:keydown={handleKeydown}
-                  autofocus
-                />
-                <button class="icon-btn save" on:click={saveEdit} title="Save">✓</button>
-                <button class="icon-btn cancel" on:click={cancelEdit} title="Cancel">✕</button>
-              {:else}
-                <span class="var-value" title={String(value)}>{formatValue(value)}</span>
-                <span class="var-source" class:override={source === 'override'}>
-                  {source === 'override' ? 'override' : 'env'}
-                </span>
-                {#if source === 'override'}
-                  <button class="icon-btn edit" on:click={() => startEdit(key, value)} title="Edit">✎</button>
-                  <button class="icon-btn delete" on:click={() => removeOverride(key)} title="Remove">✕</button>
-                {/if}
-              {/if}
+          <p class="hint">
+            Env variables use <code>$(command)</code> for dynamic tokens.
+            Overrides take precedence and can be edited inline.
+          </p>
+
+        {:else if settingsTab === 'config'}
+
+          <div class="config-section">
+            <h3 class="config-heading">Appearance</h3>
+            <div class="config-row">
+              <span class="config-label">Theme</span>
+              <div class="theme-toggle">
+                <button class="theme-btn" class:active={$theme === 'dark'} on:click={() => theme.set('dark')}>
+                  🌙 Dark
+                </button>
+                <button class="theme-btn" class:active={$theme === 'light'} on:click={() => theme.set('light')}>
+                  ☀ Light
+                </button>
+              </div>
             </div>
-          {:else}
-            <p class="empty">No variables loaded</p>
-          {/each}
-        </div>
+          </div>
 
-        <!-- Add new override -->
-        <div class="add-override">
-          <input 
-            class="add-input key"
-            placeholder="Key"
-            bind:value={newKey}
-            on:keydown={(e) => e.key === 'Enter' && addOverride()}
-          />
-          <input 
-            class="add-input value"
-            placeholder="Value"
-            bind:value={newValue}
-            on:keydown={(e) => e.key === 'Enter' && addOverride()}
-          />
-          <button class="btn small" on:click={addOverride} disabled={!newKey.trim()}>
-            + Add Override
-          </button>
-        </div>
+          <div class="config-section">
+            <h3 class="config-heading">Paths</h3>
+            <div class="config-field">
+              <label class="config-label">Templates Directory</label>
+              <input
+                class="config-input"
+                bind:value={editTemplatesDir}
+                placeholder="~/.tp/templates"
+                spellcheck="false"
+                autocomplete="off"
+              />
+            </div>
+            <div class="config-field">
+              <label class="config-label">Environment File</label>
+              <input
+                class="config-input"
+                bind:value={editEnvFile}
+                placeholder="~/.tp/env.yml"
+                spellcheck="false"
+                autocomplete="off"
+              />
+            </div>
+            <div class="config-actions">
+              <button class="btn" on:click={saveConfig} disabled={isSavingConfig}>
+                {isSavingConfig ? 'Saving…' : 'Save Config'}
+              </button>
+            </div>
+            {#if configSaveError}
+              <p class="config-error">{configSaveError}</p>
+            {/if}
+          </div>
 
-        <p class="hint">
-          Env variables use <code>$(command)</code> for dynamic tokens. 
-          Overrides take precedence and can be edited inline.
-        </p>
+          <p class="hint">
+            Config file: <code>{configFilePath || '~/.tp/config.yml'}</code><br/>
+            Path changes take effect after restarting the app.
+          </p>
+
+        {/if}
       </div>
 
       {#if statusMessage}
@@ -532,6 +625,123 @@
     border-radius: 3px;
     font-family: 'SF Mono', Monaco, monospace;
     font-size: 10px;
+  }
+
+  /* Tabs */
+  .modal-tabs {
+    display: flex;
+    padding: 0 20px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    gap: 0;
+  }
+
+  .tab-btn {
+    padding: 9px 16px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    margin-bottom: -1px;
+    transition: color 0.15s;
+  }
+
+  .tab-btn:hover {
+    color: var(--text-primary);
+  }
+
+  .tab-btn.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent-color);
+  }
+
+  /* Config tab */
+  .config-section {
+    margin-bottom: 20px;
+  }
+
+  .config-heading {
+    margin: 0 0 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+
+  .config-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .config-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 10px;
+  }
+
+  .config-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .config-input {
+    padding: 7px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 12px;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .config-input:focus {
+    border-color: var(--accent-color);
+  }
+
+  .config-actions {
+    margin-top: 12px;
+  }
+
+  .config-error {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: #f93e3e;
+  }
+
+  /* Theme toggle */
+  .theme-toggle {
+    display: flex;
+    gap: 4px;
+  }
+
+  .theme-btn {
+    padding: 5px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .theme-btn:hover {
+    border-color: var(--accent-color);
+    color: var(--text-primary);
+  }
+
+  .theme-btn.active {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: white;
   }
 
   .status-bar {

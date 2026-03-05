@@ -74,6 +74,14 @@ export function OpenOverridesFile() {
   return window['go']['main']['App']['OpenOverridesFile']();
 }
 
+export function PreviewBody(arg1, arg2) {
+  return window['go']['main']['App']['PreviewBody'](arg1, arg2);
+}
+
+export function PreviewTemplate(arg1, arg2) {
+  return window['go']['main']['App']['PreviewTemplate'](arg1, arg2);
+}
+
 export function RefreshVariables() {
   return window['go']['main']['App']['RefreshVariables']();
 }
@@ -84,6 +92,10 @@ export function ReloadConfig() {
 
 export function RenameItem(arg1, arg2) {
   return window['go']['main']['App']['RenameItem'](arg1, arg2);
+}
+
+export function SaveConfig(arg1, arg2) {
+  return window['go']['main']['App']['SaveConfig'](arg1, arg2);
 }
 
 export function SaveOverrides(arg1) {

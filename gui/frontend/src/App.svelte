@@ -85,12 +85,19 @@
       <div class="toolbar-left">
       </div>
       <div class="toolbar-actions">
-        <button 
-          class="toolbar-btn" 
-          on:click={() => settingsOpen = true} 
-          title="Variables (⌘,)"
+        <button
+          class="toolbar-btn theme-toggle-btn"
+          on:click={() => theme.update(t => t === 'dark' ? 'light' : 'dark')}
+          title="Toggle theme"
         >
-          ⚙ Variables
+          {$theme === 'dark' ? '☀' : '🌙'}
+        </button>
+        <button
+          class="toolbar-btn"
+          on:click={() => settingsOpen = true}
+          title="Settings (⌘,)"
+        >
+          ⚙ Settings
         </button>
       </div>
     </div>
@@ -201,6 +208,11 @@
   .toolbar-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .theme-toggle-btn {
+    font-size: 14px;
+    padding: 4px 8px;
   }
 
   .request-area {

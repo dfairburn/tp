@@ -3,6 +3,7 @@ export namespace main {
 	export class ConfigInfo {
 	    configPath: string;
 	    templatesDir: string;
+	    templatesDirectoryPath: string;
 	    environmentFile: string;
 	
 	    static createFrom(source: any = {}) {
@@ -13,6 +14,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.configPath = source["configPath"];
 	        this.templatesDir = source["templatesDir"];
+	        this.templatesDirectoryPath = source["templatesDirectoryPath"];
 	        this.environmentFile = source["environmentFile"];
 	    }
 	}
@@ -37,6 +39,24 @@ export namespace main {
 	        this.body = source["body"];
 	        this.contentType = source["contentType"];
 	        this.duration = source["duration"];
+	        this.error = source["error"];
+	    }
+	}
+	export class PreviewResponse {
+	    url: string;
+	    body: string;
+	    headers: Record<string, string>;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PreviewResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.body = source["body"];
+	        this.headers = source["headers"];
 	        this.error = source["error"];
 	    }
 	}
@@ -92,6 +112,7 @@ export namespace main {
 	}
 	export class TemplateResponse {
 	    name: string;
+	    absolutePath: string;
 	    method: string;
 	    url: string;
 	    headers: Record<string, string>;
@@ -106,6 +127,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
+	        this.absolutePath = source["absolutePath"];
 	        this.method = source["method"];
 	        this.url = source["url"];
 	        this.headers = source["headers"];

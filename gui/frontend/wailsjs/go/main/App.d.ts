@@ -38,11 +38,17 @@ export function OpenInEditor(arg1:string):Promise<void>;
 
 export function OpenOverridesFile():Promise<void>;
 
+export function PreviewBody(arg1:string,arg2:Record<string, string>):Promise<main.PreviewResponse>;
+
+export function PreviewTemplate(arg1:string,arg2:Record<string, string>):Promise<main.PreviewResponse>;
+
 export function RefreshVariables():Promise<Record<string, any>>;
 
 export function ReloadConfig():Promise<void>;
 
 export function RenameItem(arg1:string,arg2:string):Promise<string>;
+
+export function SaveConfig(arg1:string,arg2:string):Promise<void>;
 
 export function SaveOverrides(arg1:Record<string, string>):Promise<void>;
 

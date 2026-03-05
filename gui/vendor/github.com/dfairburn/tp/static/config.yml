@@ -1,0 +1,2 @@
+  environmentFile: "~/.tp/default.env.yml"
+  templatesDirectoryPath: "~/.tp/templates"

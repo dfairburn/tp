@@ -59,9 +59,15 @@
   // Raw body editing — persisted per-template in session (localStorage), not saved to file
   let rawBody = '';
 
-  // Save rawBody to bodyCache whenever it changes
+  // Debounce bodyCache writes: avoid a localStorage write on every keystroke
+  let _bodyCacheTimer: ReturnType<typeof setTimeout> | null = null;
   $: if (template) {
-    bodyCache.update(c => ({ ...c, [template.absolutePath]: rawBody }));
+    const path = template.absolutePath;
+    const body = rawBody;
+    if (_bodyCacheTimer) clearTimeout(_bodyCacheTimer);
+    _bodyCacheTimer = setTimeout(() => {
+      bodyCache.update(c => ({ ...c, [path]: body }));
+    }, 400);
   }
 
   // Edit mode state

@@ -296,6 +296,51 @@ func (a *App) GetTemplate(absolutePath string) (*TemplateResponse, error) {
 	}, nil
 }
 
+// mergeOverrides loads file-based overrides, merges with the given runtime overrides
+// (runtime takes precedence), and converts to config.Overrides.
+func (a *App) mergeOverrides(runtimeOverrides map[string]string) config.Overrides {
+	fileOverrides, err := a.GetOverrides()
+	if err != nil {
+		a.logger.Warnf("Error loading overrides: %v", err)
+		fileOverrides = make(map[string]string)
+	}
+	merged := make(map[string]string, len(fileOverrides)+len(runtimeOverrides))
+	for k, v := range fileOverrides {
+		merged[k] = v
+	}
+	for k, v := range runtimeOverrides {
+		merged[k] = v
+	}
+	var out config.Overrides
+	for k, v := range merged {
+		out = append(out, config.Override{Key: k, Value: v})
+	}
+	return out
+}
+
+// buildHTTPResponse converts raw HTTP response data into the HTTPResponse DTO.
+func buildHTTPResponse(statusCode int, status string, header http.Header, body []byte, duration int64) HTTPResponse {
+	headers := make(map[string]string, len(header))
+	for k, v := range header {
+		if len(v) > 0 {
+			headers[k] = strings.Join(v, ", ")
+		}
+	}
+	contentType := header.Get("Content-Type")
+	bodyStr := string(body)
+	if strings.Contains(contentType, "application/json") {
+		bodyStr = string(pretty.Pretty(body))
+	}
+	return HTTPResponse{
+		StatusCode:  statusCode,
+		Status:      status,
+		Headers:     headers,
+		Body:        bodyStr,
+		ContentType: contentType,
+		Duration:    duration,
+	}
+}
+
 // ExecuteTemplate executes a template and returns the response
 func (a *App) ExecuteTemplate(absolutePath string, overrides map[string]string) HTTPResponse {
 	// Convert overrides map to config.Overrides
@@ -306,33 +351,9 @@ func (a *App) ExecuteTemplate(absolutePath string, overrides map[string]string) 
 
 	resp, err := handlers.ExecuteTemplate(a.logger, absolutePath, a.vars, configOverrides)
 	if err != nil {
-		return HTTPResponse{
-			Error: err.Error(),
-		}
+		return HTTPResponse{Error: err.Error()}
 	}
-
-	// Convert headers to simple map
-	headers := make(map[string]string)
-	for k, v := range resp.Headers {
-		if len(v) > 0 {
-			headers[k] = strings.Join(v, ", ")
-		}
-	}
-
-	// Format body if JSON
-	body := string(resp.Body)
-	if strings.Contains(resp.ContentType, "application/json") {
-		body = string(pretty.Pretty(resp.Body))
-	}
-
-	return HTTPResponse{
-		StatusCode:  resp.StatusCode,
-		Status:      resp.Status,
-		Headers:     headers,
-		Body:        body,
-		ContentType: resp.ContentType,
-		Duration:    resp.Duration.Milliseconds(),
-	}
+	return buildHTTPResponse(resp.StatusCode, resp.Status, resp.Headers, resp.Body, resp.Duration.Milliseconds())
 }
 
 // ExecuteTemplateWithBodyAndOverrides executes a template using a caller-supplied body
@@ -340,25 +361,7 @@ func (a *App) ExecuteTemplate(absolutePath string, overrides map[string]string) 
 // still rendered from the template with overrides applied.
 func (a *App) ExecuteTemplateWithBodyAndOverrides(absolutePath string, runtimeOverrides map[string]string, bodyOverride string) HTTPResponse {
 	startTime := time.Now()
-
-	fileOverrides, err := a.GetOverrides()
-	if err != nil {
-		a.logger.Warnf("Error loading overrides: %v", err)
-		fileOverrides = make(map[string]string)
-	}
-
-	mergedOverrides := make(map[string]string)
-	for k, v := range fileOverrides {
-		mergedOverrides[k] = v
-	}
-	for k, v := range runtimeOverrides {
-		mergedOverrides[k] = v
-	}
-
-	var configOverrides config.Overrides
-	for k, v := range mergedOverrides {
-		configOverrides = append(configOverrides, config.Override{Key: k, Value: v})
-	}
+	configOverrides := a.mergeOverrides(runtimeOverrides)
 
 	tmpl, err := handlers.RenderTemplate(a.logger, absolutePath, a.vars, configOverrides)
 	if err != nil {
@@ -396,7 +399,7 @@ func (a *App) ExecuteTemplateWithBodyAndOverrides(absolutePath string, runtimeOv
 		httpReq.Header.Set(k, v)
 	}
 
-	cli := http.Client{}
+	cli := &http.Client{Timeout: 30 * time.Second}
 	resp, err := cli.Do(httpReq)
 	if err != nil {
 		return HTTPResponse{Error: err.Error()}
@@ -408,27 +411,7 @@ func (a *App) ExecuteTemplateWithBodyAndOverrides(absolutePath string, runtimeOv
 		return HTTPResponse{Error: err.Error()}
 	}
 
-	headers := make(map[string]string)
-	for k, v := range resp.Header {
-		if len(v) > 0 {
-			headers[k] = strings.Join(v, ", ")
-		}
-	}
-
-	body := string(respBody)
-	contentType := resp.Header.Get("Content-Type")
-	if strings.Contains(contentType, "application/json") {
-		body = string(pretty.Pretty(respBody))
-	}
-
-	return HTTPResponse{
-		StatusCode:  resp.StatusCode,
-		Status:      resp.Status,
-		Headers:     headers,
-		Body:        body,
-		ContentType: contentType,
-		Duration:    time.Since(startTime).Milliseconds(),
-	}
+	return buildHTTPResponse(resp.StatusCode, resp.Status, resp.Header, respBody, time.Since(startTime).Milliseconds())
 }
 
 // GetVariables returns the current environment variables
@@ -741,30 +724,10 @@ func (a *App) OpenOverridesFile() error {
 
 // PreviewTemplate renders a template with overrides applied but without making an HTTP request
 func (a *App) PreviewTemplate(absolutePath string, runtimeOverrides map[string]string) PreviewResponse {
-	fileOverrides, err := a.GetOverrides()
-	if err != nil {
-		a.logger.Warnf("Error loading overrides: %v", err)
-		fileOverrides = make(map[string]string)
-	}
-
-	mergedOverrides := make(map[string]string)
-	for k, v := range fileOverrides {
-		mergedOverrides[k] = v
-	}
-	for k, v := range runtimeOverrides {
-		mergedOverrides[k] = v
-	}
-
-	var configOverrides config.Overrides
-	for k, v := range mergedOverrides {
-		configOverrides = append(configOverrides, config.Override{Key: k, Value: v})
-	}
-
-	tmpl, err := handlers.RenderTemplate(a.logger, absolutePath, a.vars, configOverrides)
+	tmpl, err := handlers.RenderTemplate(a.logger, absolutePath, a.vars, a.mergeOverrides(runtimeOverrides))
 	if err != nil {
 		return PreviewResponse{Error: err.Error()}
 	}
-
 	return PreviewResponse{
 		URL:     strings.TrimSpace(tmpl.Url),
 		Body:    strings.TrimSpace(tmpl.Body),
@@ -774,26 +737,7 @@ func (a *App) PreviewTemplate(absolutePath string, runtimeOverrides map[string]s
 
 // PreviewBody renders a raw body string with overrides applied, without reading from a file
 func (a *App) PreviewBody(rawBody string, runtimeOverrides map[string]string) PreviewResponse {
-	fileOverrides, err := a.GetOverrides()
-	if err != nil {
-		a.logger.Warnf("Error loading overrides: %v", err)
-		fileOverrides = make(map[string]string)
-	}
-
-	mergedOverrides := make(map[string]string)
-	for k, v := range fileOverrides {
-		mergedOverrides[k] = v
-	}
-	for k, v := range runtimeOverrides {
-		mergedOverrides[k] = v
-	}
-
-	var configOverrides config.Overrides
-	for k, v := range mergedOverrides {
-		configOverrides = append(configOverrides, config.Override{Key: k, Value: v})
-	}
-
-	rendered, err := handlers.RenderBodyString(a.logger, rawBody, a.vars, configOverrides)
+	rendered, err := handlers.RenderBodyString(a.logger, rawBody, a.vars, a.mergeOverrides(runtimeOverrides))
 	if err != nil {
 		return PreviewResponse{Body: rendered, Error: err.Error()}
 	}
@@ -802,55 +746,9 @@ func (a *App) PreviewBody(rawBody string, runtimeOverrides map[string]string) Pr
 
 // ExecuteTemplateWithOverrides executes a template with both env vars and file-based overrides
 func (a *App) ExecuteTemplateWithOverrides(absolutePath string, runtimeOverrides map[string]string) HTTPResponse {
-	// Load file-based overrides
-	fileOverrides, err := a.GetOverrides()
+	resp, err := handlers.ExecuteTemplate(a.logger, absolutePath, a.vars, a.mergeOverrides(runtimeOverrides))
 	if err != nil {
-		a.logger.Warnf("Error loading overrides: %v", err)
-		fileOverrides = make(map[string]string)
+		return HTTPResponse{Error: err.Error()}
 	}
-
-	// Merge: file overrides first, then runtime overrides (runtime takes precedence)
-	mergedOverrides := make(map[string]string)
-	for k, v := range fileOverrides {
-		mergedOverrides[k] = v
-	}
-	for k, v := range runtimeOverrides {
-		mergedOverrides[k] = v
-	}
-
-	// Convert to config.Overrides
-	var configOverrides config.Overrides
-	for k, v := range mergedOverrides {
-		configOverrides = append(configOverrides, config.Override{Key: k, Value: v})
-	}
-
-	resp, err := handlers.ExecuteTemplate(a.logger, absolutePath, a.vars, configOverrides)
-	if err != nil {
-		return HTTPResponse{
-			Error: err.Error(),
-		}
-	}
-
-	// Convert headers to simple map
-	headers := make(map[string]string)
-	for k, v := range resp.Headers {
-		if len(v) > 0 {
-			headers[k] = strings.Join(v, ", ")
-		}
-	}
-
-	// Format body if JSON
-	body := string(resp.Body)
-	if strings.Contains(resp.ContentType, "application/json") {
-		body = string(pretty.Pretty(resp.Body))
-	}
-
-	return HTTPResponse{
-		StatusCode:  resp.StatusCode,
-		Status:      resp.Status,
-		Headers:     headers,
-		Body:        body,
-		ContentType: resp.ContentType,
-		Duration:    resp.Duration.Milliseconds(),
-	}
+	return buildHTTPResponse(resp.StatusCode, resp.Status, resp.Headers, resp.Body, resp.Duration.Milliseconds())
 }

@@ -100,9 +100,15 @@ paramValuesCache.subscribe(value => {
   saveToStorage(STORAGE_KEYS.paramValuesCache, value);
 });
 
-// Persist body cache
+// Persist body cache (limit size to prevent storage overflow)
 bodyCache.subscribe(value => {
-  saveToStorage(STORAGE_KEYS.bodyCache, value);
+  const entries = Object.entries(value);
+  if (entries.length > 100) {
+    const trimmed = Object.fromEntries(entries.slice(-100));
+    saveToStorage(STORAGE_KEYS.bodyCache, trimmed);
+  } else {
+    saveToStorage(STORAGE_KEYS.bodyCache, value);
+  }
 });
 
 // When selected template changes, update path, restore param values, and load cached response

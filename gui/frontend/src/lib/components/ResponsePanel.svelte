@@ -41,29 +41,40 @@
     return { html: out.join(''), count };
   }
 
-  // Derived display body — recomputes whenever the query, body, or visibility changes
+  // Derived display body — recomputes whenever the query, body, or visibility changes.
+  // Highlights are debounced so a large body isn't re-scanned on every keystroke.
   let displayBody = '';
+  let _searchTimer: ReturnType<typeof setTimeout> | null = null;
   $: {
-    if (searchVisible && searchQuery.trim()) {
-      const result = applySearchHighlights(highlightedBody, searchQuery);
-      displayBody = result.html;
-      matchCount = result.count;
+    if (_searchTimer) clearTimeout(_searchTimer);
+    const query = searchQuery;
+    const body = highlightedBody;
+    const visible = searchVisible;
+    if (visible && query.trim()) {
+      _searchTimer = setTimeout(() => {
+        const result = applySearchHighlights(body, query);
+        displayBody = result.html;
+        matchCount = result.count;
+      }, 150);
     } else {
-      displayBody = highlightedBody;
+      displayBody = body;
       matchCount = 0;
     }
   }
 
   // Reset to first match when the query changes
-  let _prevQuery = '';
-  $: if (searchQuery !== _prevQuery) {
-    _prevQuery = searchQuery;
-    matchIndex = 0;
-  }
+  $: if (searchQuery !== undefined) matchIndex = 0;
 
-  // After every Svelte DOM update, sync the current-match highlight class and scroll
+  // Use a plain object (not a reactive let) as a dirty flag so afterUpdate can
+  // short-circuit without triggering extra re-renders.
+  const _searchSync = { pending: false };
+  $: if (searchVisible) { matchIndex; displayBody; _searchSync.pending = true; }
+
+  // After DOM update, sync the current-match highlight class and scroll — only
+  // when search state actually changed (guarded by _searchSync.pending).
   afterUpdate(() => {
-    if (!searchVisible || !preElement || !searchQuery.trim()) return;
+    if (!_searchSync.pending || !searchVisible || !preElement) return;
+    _searchSync.pending = false;
     const marks = Array.from(preElement.querySelectorAll<HTMLElement>('.search-mark'));
     if (!marks.length) return;
     const idx = Math.max(0, Math.min(matchIndex, marks.length - 1));

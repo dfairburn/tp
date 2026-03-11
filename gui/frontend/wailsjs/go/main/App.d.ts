@@ -10,6 +10,8 @@ export function DeleteTemplate(arg1:string):Promise<void>;
 
 export function ExecuteTemplate(arg1:string,arg2:Record<string, string>):Promise<main.HTTPResponse>;
 
+export function ExecuteTemplateWithBodyAndOverrides(arg1:string,arg2:Record<string, string>,arg3:string):Promise<main.HTTPResponse>;
+
 export function ExecuteTemplateWithOverrides(arg1:string,arg2:Record<string, string>):Promise<main.HTTPResponse>;
 
 export function GetAppInfo():Promise<Record<string, string>>;

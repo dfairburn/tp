@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -331,6 +332,102 @@ func (a *App) ExecuteTemplate(absolutePath string, overrides map[string]string) 
 		Body:        body,
 		ContentType: resp.ContentType,
 		Duration:    resp.Duration.Milliseconds(),
+	}
+}
+
+// ExecuteTemplateWithBodyAndOverrides executes a template using a caller-supplied body
+// instead of the body defined in the template file. The URL, method, and headers are
+// still rendered from the template with overrides applied.
+func (a *App) ExecuteTemplateWithBodyAndOverrides(absolutePath string, runtimeOverrides map[string]string, bodyOverride string) HTTPResponse {
+	startTime := time.Now()
+
+	fileOverrides, err := a.GetOverrides()
+	if err != nil {
+		a.logger.Warnf("Error loading overrides: %v", err)
+		fileOverrides = make(map[string]string)
+	}
+
+	mergedOverrides := make(map[string]string)
+	for k, v := range fileOverrides {
+		mergedOverrides[k] = v
+	}
+	for k, v := range runtimeOverrides {
+		mergedOverrides[k] = v
+	}
+
+	var configOverrides config.Overrides
+	for k, v := range mergedOverrides {
+		configOverrides = append(configOverrides, config.Override{Key: k, Value: v})
+	}
+
+	tmpl, err := handlers.RenderTemplate(a.logger, absolutePath, a.vars, configOverrides)
+	if err != nil {
+		return HTTPResponse{Error: err.Error()}
+	}
+
+	strippedBody := strings.TrimSpace(bodyOverride)
+	strippedURL := strings.TrimSpace(tmpl.Url)
+
+	u, err := neturl.Parse(strippedURL)
+	if err != nil {
+		return HTTPResponse{Error: err.Error()}
+	}
+	u.RawQuery = u.Query().Encode()
+
+	var httpReq *http.Request
+	if tmpl.Headers["Content-Type"] == "application/x-www-form-urlencoded" {
+		data := neturl.Values{}
+		for _, d := range strings.Split(strippedBody, " ") {
+			parts := strings.SplitN(d, "=", 2)
+			if len(parts) != 2 {
+				return HTTPResponse{Error: "expected key=value pairs in form body"}
+			}
+			data.Set(parts[0], parts[1])
+		}
+		httpReq, err = http.NewRequestWithContext(context.Background(), tmpl.Method, u.String(), strings.NewReader(data.Encode()))
+	} else {
+		httpReq, err = http.NewRequestWithContext(context.Background(), tmpl.Method, u.String(), strings.NewReader(strippedBody))
+	}
+	if err != nil {
+		return HTTPResponse{Error: err.Error()}
+	}
+
+	for k, v := range tmpl.Headers {
+		httpReq.Header.Set(k, v)
+	}
+
+	cli := http.Client{}
+	resp, err := cli.Do(httpReq)
+	if err != nil {
+		return HTTPResponse{Error: err.Error()}
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return HTTPResponse{Error: err.Error()}
+	}
+
+	headers := make(map[string]string)
+	for k, v := range resp.Header {
+		if len(v) > 0 {
+			headers[k] = strings.Join(v, ", ")
+		}
+	}
+
+	body := string(respBody)
+	contentType := resp.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		body = string(pretty.Pretty(respBody))
+	}
+
+	return HTTPResponse{
+		StatusCode:  resp.StatusCode,
+		Status:      resp.Status,
+		Headers:     headers,
+		Body:        body,
+		ContentType: contentType,
+		Duration:    time.Since(startTime).Milliseconds(),
 	}
 }
 

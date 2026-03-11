@@ -18,6 +18,10 @@ export function ExecuteTemplate(arg1, arg2) {
   return window['go']['main']['App']['ExecuteTemplate'](arg1, arg2);
 }
 
+export function ExecuteTemplateWithBodyAndOverrides(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ExecuteTemplateWithBodyAndOverrides'](arg1, arg2, arg3);
+}
+
 export function ExecuteTemplateWithOverrides(arg1, arg2) {
   return window['go']['main']['App']['ExecuteTemplateWithOverrides'](arg1, arg2);
 }

@@ -1,23 +1,28 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { selectedTemplate, requestTab, overrides, isExecuting, currentResponse, paramValuesCache } from '../stores/app';
-  import { ExecuteTemplateWithOverrides, SaveTemplate, GetTemplate, PreviewTemplate, PreviewBody, GetVariables } from '../../../wailsjs/go/main/App';
+  import { get } from 'svelte/store';
+  import { selectedTemplate, requestTab, overrides, isExecuting, currentResponse, paramValuesCache, bodyCache } from '../stores/app';
+  import { ExecuteTemplateWithBodyAndOverrides, SaveTemplate, GetTemplate, PreviewTemplate, GetVariables, RefreshVariables } from '../../../wailsjs/go/main/App';
   import yaml from 'js-yaml';
-  import hljs from 'highlight.js/lib/core';
-  import json from 'highlight.js/lib/languages/json';
-  import xml from 'highlight.js/lib/languages/xml';
-  import graphql from 'highlight.js/lib/languages/graphql';
-
-  hljs.registerLanguage('json', json);
-  hljs.registerLanguage('xml', xml);
-  hljs.registerLanguage('graphql', graphql);
 
   const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
   let envVars: Record<string, any> = {};
+  let isRefreshing = false;
+
   onMount(async () => {
     try { envVars = await GetVariables() || {}; } catch {}
   });
+
+  async function refreshEnvVars() {
+    isRefreshing = true;
+    try {
+      envVars = await RefreshVariables() || {};
+      // Re-run preview so rendered headers/URL reflect the new values
+      await doPreview();
+    } catch {}
+    isRefreshing = false;
+  }
 
   $: template = $selectedTemplate;
 
@@ -29,70 +34,34 @@
       prevPath = path;
       editing = false;
       saveError = '';
-      rawMode = false;
-      rawBody = '';
-      saveRawError = '';
+      const cached = get(bodyCache);
+      rawBody = (path && cached[path] !== undefined) ? cached[path] : ($selectedTemplate?.body || '');
       previewUrl = '';
-      previewBody = '';
       previewHeaders = {};
       previewError = '';
     }
   }
 
+  const BODYLESS_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
   // View mode derived state
   $: usedVariables = template ? extractVariables(template) : [];
   $: headerVariables = template ? extractHeaderVars(template) : [];
-  $: bodyAndUrlVariables = template ? extractBodyAndUrlVars(template) : [];
-  $: bodyLanguage = template?.body ? detectLanguage(template.body, template.headers) : null;
-  $: highlightedBody = template?.body ? highlightBody(template.body, bodyLanguage) : '';
-  // Go-rendered preview state
+  $: urlVars = template ? extractUrlOnlyVars(template) : [];
+  $: methodHasBody = !BODYLESS_METHODS.has((template?.method || 'GET').toUpperCase());
+  // Go-rendered preview state (URL only — body is always directly editable)
   let previewUrl = '';
-  let previewBody = '';
   let previewHeaders: Record<string, string> = {};
   let previewError = '';
   let previewTimer: ReturnType<typeof setTimeout> | null = null;
-  $: highlightedPreviewBody = previewBody ? highlightBody(formatBody(previewBody, bodyLanguage), bodyLanguage) : '';
   $: displayHeaders = Object.keys(previewHeaders).length > 0 ? previewHeaders : (template?.headers || {});
 
-  // Raw body editing (view mode inline editor)
-  let rawMode = false;
+  // Raw body editing — persisted per-template in session (localStorage), not saved to file
   let rawBody = '';
-  let saveRawError = '';
 
-  function toggleRaw() {
-    rawMode = !rawMode;
-    if (rawMode) {
-      rawBody = template?.body || '';
-      saveRawError = '';
-    }
-  }
-
-  async function saveBodyOnly() {
-    if (!template) return;
-    saveRawError = '';
-    try {
-      const headers: Record<string, string> = {};
-      for (const [k, v] of Object.entries(template.headers || {})) {
-        headers[k] = String(v);
-      }
-      const descriptions: Record<string, string> = {};
-      for (const [k, v] of Object.entries(template.descriptions || {})) {
-        descriptions[k] = String(v);
-      }
-      const templateObj: Record<string, any> = {
-        name: template.name,
-        method: template.method,
-        url: template.url,
-        headers,
-        body: rawBody,
-      };
-      if (Object.keys(descriptions).length > 0) templateObj.descriptions = descriptions;
-      await SaveTemplate(template.absolutePath, yaml.dump(templateObj));
-      const updated = await GetTemplate(template.absolutePath);
-      selectedTemplate.set(updated);
-    } catch (err) {
-      saveRawError = String(err);
-    }
+  // Save rawBody to bodyCache whenever it changes
+  $: if (template) {
+    bodyCache.update(c => ({ ...c, [template.absolutePath]: rawBody }));
   }
 
   // Edit mode state
@@ -190,7 +159,7 @@
     isExecuting.set(true);
     currentResponse.set(null);
     try {
-      const response = await ExecuteTemplateWithOverrides(template.absolutePath, $overrides);
+      const response = await ExecuteTemplateWithBodyAndOverrides(template.absolutePath, $overrides, rawBody);
       currentResponse.set(response);
     } catch (err) {
       currentResponse.set({
@@ -220,64 +189,12 @@
     return colors[method?.toUpperCase()] || '#999';
   }
 
-  function formatHeaders(headers: Record<string, string> | null | undefined): string {
-    if (!headers) return '';
-    return Object.entries(headers)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join('\n');
-  }
-
-  function detectLanguage(body: string, headers: Record<string, string> | null | undefined): string | null {
-    const contentType = headers?.['Content-Type'] || headers?.['content-type'] || '';
-    if (contentType.includes('json')) return 'json';
-    if (contentType.includes('xml')) return 'xml';
-    if (contentType.includes('graphql')) return 'graphql';
-    const trimmed = body.trim();
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'json';
-    if (trimmed.startsWith('<')) return 'xml';
-    if (trimmed.match(/^\s*(query|mutation|subscription|fragment)\s/)) return 'graphql';
-    return null;
-  }
-
-  function formatBody(body: string, language: string | null): string {
-    if (language === 'json' && body) {
-      try {
-        return JSON.stringify(JSON.parse(body), null, 2);
-      } catch {
-        // Not valid JSON (may contain template vars or be malformed) — leave as-is
-      }
-    }
-    return body;
-  }
-
-  function highlightBody(body: string, language: string | null): string {
-    if (!body) return '';
-    if (language) {
-      try {
-        return hljs.highlight(body, { language }).value;
-      } catch (e) {
-        console.warn('Highlight error:', e);
-      }
-    }
-    return body
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-  }
-
   async function doPreview() {
     if (!template || editing) return;
-    if (rawMode) {
-      const result = await PreviewBody(rawBody, $overrides);
-      previewBody = result.body || '';
-      previewError = result.error || '';
-    } else {
-      const result = await PreviewTemplate(template.absolutePath, $overrides);
-      previewUrl = result.url || '';
-      previewBody = result.body || '';
-      previewHeaders = result.headers || {};
-      previewError = result.error || '';
-    }
+    const result = await PreviewTemplate(template.absolutePath, $overrides);
+    previewUrl = result.url || '';
+    previewHeaders = result.headers || {};
+    previewError = result.error || '';
   }
 
   function schedulePreview() {
@@ -286,8 +203,7 @@
   }
 
   // Trigger preview whenever template or overrides change (not while editing).
-  // Also track rawBody when in raw mode for live preview.
-  $: if (!editing) { template; $overrides; if (rawMode) rawBody; schedulePreview(); }
+  $: if (!editing) { template; $overrides; schedulePreview(); }
 
   // Extract variable name from a single {{...}} block inner content,
   // matching the same patterns as handlers/use-help.go ParseUsages.
@@ -328,11 +244,10 @@
     return Array.from(vars).sort();
   }
 
-  function extractBodyAndUrlVars(tmpl: typeof template): string[] {
-    if (!tmpl) return [];
+  function extractUrlOnlyVars(tmpl: typeof template): string[] {
+    if (!tmpl?.url) return [];
     const vars = new Set<string>();
-    if (tmpl.url) extractVarsFromStr(tmpl.url, vars);
-    if (tmpl.body) extractVarsFromStr(tmpl.body, vars);
+    extractVarsFromStr(tmpl.url, vars);
     return Array.from(vars).sort();
   }
 
@@ -391,6 +306,9 @@
           {$isExecuting ? '⏳' : '▶'} Execute
         </button>
         <button class="edit-btn" on:click={enterEditMode} title="Edit template">✎</button>
+        <button class="refresh-btn" on:click={refreshEnvVars} disabled={isRefreshing} title="Refresh environment variables">
+          {isRefreshing ? '⏳' : '↻'}
+        </button>
       {/if}
     </div>
 
@@ -495,9 +413,9 @@
             </div>
           {/if}
         {:else}
-          {#if bodyAndUrlVariables.length > 0}
+          {#if urlVars.length > 0}
             <div class="params-grid">
-              {#each bodyAndUrlVariables as varName}
+              {#each urlVars as varName}
                 <code class="pgrid-key">{'{{.'}{varName}{'}}'}</code>
                 <input
                   type="text"
@@ -513,36 +431,17 @@
             </div>
           {/if}
 
-          <div class="body-toolbar">
-            <button class="raw-toggle" class:active={rawMode} on:click={toggleRaw} title="Edit raw template">
-              ✎ Raw
-            </button>
-          </div>
+          {#if methodHasBody}
+            {#if previewError}
+              <div class="preview-error">{previewError}</div>
+            {/if}
 
-          {#if previewError}
-            <div class="preview-error">{previewError}</div>
-          {/if}
-
-          {#if rawMode}
-            <div class="body-split">
-              <div class="body-split-pane">
-                <pre class="code-block highlighted split-pre">{@html (previewBody ? highlightedPreviewBody : highlightedBody) || 'No body'}</pre>
-              </div>
-              <div class="body-split-pane body-split-right">
-                <textarea
-                  class="body-raw-edit"
-                  bind:value={rawBody}
-                  spellcheck="false"
-                  placeholder="Request body..."
-                ></textarea>
-                <div class="raw-actions">
-                  {#if saveRawError}<span class="preview-error">{saveRawError}</span>{/if}
-                  <button class="save-raw-btn" on:click={saveBodyOnly}>Save</button>
-                </div>
-              </div>
-            </div>
-          {:else}
-            <pre class="code-block highlighted">{@html (previewBody ? highlightedPreviewBody : highlightedBody) || 'No body'}</pre>
+            <textarea
+              class="body-raw-edit body-direct-edit"
+              bind:value={rawBody}
+              spellcheck="false"
+              placeholder="Request body..."
+            ></textarea>
           {/if}
         {/if}
       {/if}
@@ -672,6 +571,27 @@
     color: var(--text-primary);
   }
 
+  .refresh-btn {
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .refresh-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   /* Edit mode url-bar elements */
   .method-select {
     padding: 5px 6px;
@@ -799,16 +719,6 @@
     padding: 12px;
     display: flex;
     flex-direction: column;
-  }
-
-  .code-block {
-    margin: 0;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--text-primary);
-    white-space: pre-wrap;
-    word-break: break-word;
   }
 
   /* Edit mode: headers */
@@ -945,62 +855,6 @@
     white-space: nowrap;
   }
 
-  /* Raw body editing */
-  .body-toolbar {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 6px;
-  }
-
-  .raw-toggle {
-    padding: 3px 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-secondary);
-    color: var(--text-secondary);
-    font-size: 11px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .raw-toggle:hover {
-    border-color: var(--accent-color);
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
-  .raw-toggle.active {
-    background: var(--accent-color);
-    border-color: var(--accent-color);
-    color: white;
-  }
-
-  /* Side-by-side split */
-  .body-split {
-    display: flex;
-    gap: 8px;
-    flex: 1;
-    min-height: 200px;
-  }
-
-  .body-split-pane {
-    flex: 1;
-    min-width: 0;
-    overflow: auto;
-  }
-
-  .body-split-right {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    overflow: visible;
-  }
-
-  .split-pre {
-    height: 100%;
-    overflow: auto;
-  }
-
   .body-raw-edit {
     flex: 1;
     width: 100%;
@@ -1018,28 +872,9 @@
     box-sizing: border-box;
   }
 
-  .raw-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-
-  .save-raw-btn {
-    padding: 5px 16px;
-    border: none;
-    border-radius: 4px;
-    background: var(--accent-color);
-    color: white;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: opacity 0.15s;
-  }
-
-  .save-raw-btn:hover {
-    opacity: 0.9;
+  .body-direct-edit {
+    min-height: 200px;
+    resize: vertical;
   }
 
   /* View mode: rendered headers grid */
@@ -1142,61 +977,4 @@
     opacity: 0.7;
   }
 
-  /* highlight.js syntax highlighting */
-  .code-block.highlighted :global(.hljs-string),
-  .code-block.highlighted :global(.hljs-attr) {
-    color: #ce9178;
-  }
-
-  .code-block.highlighted :global(.hljs-number) {
-    color: #b5cea8;
-  }
-
-  .code-block.highlighted :global(.hljs-literal),
-  .code-block.highlighted :global(.hljs-keyword) {
-    color: #569cd6;
-  }
-
-  .code-block.highlighted :global(.hljs-name),
-  .code-block.highlighted :global(.hljs-tag) {
-    color: #569cd6;
-  }
-
-  .code-block.highlighted :global(.hljs-attribute) {
-    color: #9cdcfe;
-  }
-
-  .code-block.highlighted :global(.hljs-symbol),
-  .code-block.highlighted :global(.hljs-punctuation) {
-    color: #d4d4d4;
-  }
-
-  /* Light theme adjustments */
-  :global(.light) .code-block.highlighted :global(.hljs-string),
-  :global(.light) .code-block.highlighted :global(.hljs-attr) {
-    color: #a31515;
-  }
-
-  :global(.light) .code-block.highlighted :global(.hljs-number) {
-    color: #098658;
-  }
-
-  :global(.light) .code-block.highlighted :global(.hljs-literal),
-  :global(.light) .code-block.highlighted :global(.hljs-keyword) {
-    color: #0000ff;
-  }
-
-  :global(.light) .code-block.highlighted :global(.hljs-name),
-  :global(.light) .code-block.highlighted :global(.hljs-tag) {
-    color: #800000;
-  }
-
-  :global(.light) .code-block.highlighted :global(.hljs-attribute) {
-    color: #ff0000;
-  }
-
-  :global(.light) .code-block.highlighted :global(.hljs-symbol),
-  :global(.light) .code-block.highlighted :global(.hljs-punctuation) {
-    color: #1e1e1e;
-  }
 </style>

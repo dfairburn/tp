@@ -24,6 +24,12 @@ build: vendor ## Build your project and put the output binary in bin/
 	mkdir -p bin
 	GO111MODULE=on $(GOCMD) build -mod vendor -o bin/$(CLI_BINARY_NAME) ./cmd/tp
 
+build-gui: ## Build the Wails GUI app for darwin/arm64 and whitelist with Gatekeeper for local dev
+	cd gui && wails build -platform darwin/arm64
+	find gui/build/bin/tp-gui.app -print0 | xargs -0 xattr -c
+	codesign --force --deep --sign - gui/build/bin/tp-gui.app
+	sudo spctl --add gui/build/bin/tp-gui.app
+
 clean: ## Remove build related file
 	rm -fr ./bin
 	rm -f ./junit-report.xml checkstyle-report.xml ./coverage.xml ./profile.cov yamllint-checkstyle.xml

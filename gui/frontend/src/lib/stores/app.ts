@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   responseCache: 'tp-gui-response-cache',
   theme: 'tp-gui-theme',
   paramValuesCache: 'tp-gui-param-values',
+  bodyCache: 'tp-gui-body-cache',
 };
 
 // Helper to safely parse JSON from localStorage
@@ -62,6 +63,11 @@ export const paramValuesCache = writable<Record<string, Record<string, string>>>
   loadFromStorage(STORAGE_KEYS.paramValuesCache, {})
 );
 
+// Per-template body cache: templatePath -> body string (session-editable, not saved to file)
+export const bodyCache = writable<Record<string, string>>(
+  loadFromStorage(STORAGE_KEYS.bodyCache, {})
+);
+
 // Persist selected template path
 selectedTemplatePath.subscribe(value => {
   saveToStorage(STORAGE_KEYS.selectedTemplatePath, value);
@@ -92,6 +98,11 @@ responseCache.subscribe(value => {
 // Persist param values cache
 paramValuesCache.subscribe(value => {
   saveToStorage(STORAGE_KEYS.paramValuesCache, value);
+});
+
+// Persist body cache
+bodyCache.subscribe(value => {
+  saveToStorage(STORAGE_KEYS.bodyCache, value);
 });
 
 // When selected template changes, update path, restore param values, and load cached response

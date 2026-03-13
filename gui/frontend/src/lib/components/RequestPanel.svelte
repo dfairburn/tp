@@ -4,12 +4,13 @@
   import { selectedTemplate, requestTab, overrides, isExecuting, currentResponse, paramValuesCache, bodyCache } from '../stores/app';
   import { ExecuteTemplateWithBodyAndOverrides, SaveTemplate, GetTemplate, PreviewTemplate, PreviewBody, GetVariables, RefreshVariables } from '../../../wailsjs/go/app/App';
   import yaml from 'js-yaml';
-  import { getMethodColor } from '../utils';
+  import { getMethodColor, makeErrorResponse } from '../utils';
   import {
     HTTP_METHODS, BODYLESS_METHODS,
     extractVariables, extractHeaderVars, extractUrlOnlyVars, extractVarsFromStrings, extractBodyVarsOnly,
   } from './RequestPanel';
   import styles from './RequestPanel.module.css';
+  import ParamRow from './ParamRow.svelte';
 
   let envVars: Record<string, any> = {};
   let isRefreshing = false;
@@ -205,15 +206,7 @@
       const response = await ExecuteTemplateWithBodyAndOverrides(template.absolutePath, $overrides, rawBody);
       currentResponse.set(response);
     } catch (err) {
-      currentResponse.set({
-        statusCode: 0,
-        status: 'Error',
-        headers: {},
-        body: '',
-        contentType: '',
-        duration: 0,
-        error: String(err),
-      });
+      currentResponse.set(makeErrorResponse(err));
     } finally {
       isExecuting.set(false);
     }
@@ -381,17 +374,13 @@
           {#if headerVariables.length > 0}
             <div class={styles['params-grid']}>
               {#each headerVariables as varName}
-                <code class={styles['pgrid-key']}>{'{{.'}{varName}{'}}'}</code>
-                <input
-                  type="text"
-                  class={styles['pgrid-value']}
+                <ParamRow
+                  {varName}
                   value={$overrides[varName] ?? ''}
-                  on:input={e => updateParamValue(varName, e.currentTarget.value)}
                   placeholder={envVars[varName] != null ? String(envVars[varName]) : 'Value...'}
-                  autocomplete="off"
-                  spellcheck="false"
+                  description={template.descriptions?.[varName] ?? ''}
+                  on:change={e => updateParamValue(varName, e.detail)}
                 />
-                <span class={styles['pgrid-desc']}>{template.descriptions?.[varName] ?? ''}</span>
               {/each}
             </div>
           {/if}
@@ -437,17 +426,13 @@
           {#if urlVars.length > 0}
             <div class={styles['params-grid']}>
               {#each urlVars as varName}
-                <code class={styles['pgrid-key']}>{'{{.'}{varName}{'}}'}</code>
-                <input
-                  type="text"
-                  class={styles['pgrid-value']}
+                <ParamRow
+                  {varName}
                   value={$overrides[varName] ?? ''}
-                  on:input={e => updateParamValue(varName, e.currentTarget.value)}
                   placeholder={envVars[varName] != null ? String(envVars[varName]) : 'Value...'}
-                  autocomplete="off"
-                  spellcheck="false"
+                  description={template.descriptions?.[varName] ?? ''}
+                  on:change={e => updateParamValue(varName, e.detail)}
                 />
-                <span class={styles['pgrid-desc']}>{template.descriptions?.[varName] ?? ''}</span>
               {/each}
             </div>
           {/if}
@@ -479,15 +464,11 @@
                 {#if bodyVars.length > 0}
                   <div class={styles['template-vars-grid']}>
                     {#each bodyVars as varName}
-                      <code class={styles['pgrid-key']}>{'{{.'}{varName}{'}}'}</code>
-                      <input
-                        type="text"
-                        class={styles['pgrid-value']}
+                      <ParamRow
+                        {varName}
                         value={$overrides[varName] ?? ''}
-                        on:input={e => updateParamValue(varName, e.currentTarget.value)}
                         placeholder={envVars[varName] != null ? String(envVars[varName]) : 'Value...'}
-                        autocomplete="off"
-                        spellcheck="false"
+                        on:change={e => updateParamValue(varName, e.detail)}
                       />
                     {/each}
                   </div>

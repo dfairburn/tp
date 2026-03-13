@@ -5,6 +5,7 @@
   import SettingsPanel from './lib/components/SettingsPanel.svelte';
   import { theme, selectedTemplate, isExecuting, currentResponse } from './lib/stores/app';
   import { ExecuteTemplateWithOverrides } from '../wailsjs/go/app/App';
+  import { makeErrorResponse } from './lib/utils';
   import { onMount, onDestroy } from 'svelte';
 
   let settingsOpen = false;
@@ -79,15 +80,7 @@
       const response = await ExecuteTemplateWithOverrides(template.absolutePath, {});
       currentResponse.set(response);
     } catch (err) {
-      currentResponse.set({
-        statusCode: 0,
-        status: 'Error',
-        headers: {},
-        body: '',
-        contentType: '',
-        duration: 0,
-        error: String(err),
-      });
+      currentResponse.set(makeErrorResponse(err));
     } finally {
       isExecuting.set(false);
     }

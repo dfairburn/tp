@@ -1,3 +1,17 @@
+import type { app } from '../../wailsjs/go/models';
+
+export function makeErrorResponse(err: unknown): app.HTTPResponse {
+  return {
+    statusCode: 0,
+    status: 'Error',
+    headers: {},
+    body: '',
+    contentType: '',
+    duration: 0,
+    error: String(err),
+  } as app.HTTPResponse;
+}
+
 export function getMethodColor(method: string): string {
   const colors: Record<string, string> = {
     GET: '#61affe',

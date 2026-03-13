@@ -3,7 +3,7 @@
   import { templates, selectedTemplate, expandedDirs, searchQuery, filteredTemplates, toggleDirectory } from '../stores/app';
   import { GetTemplates, GetTemplate, CreateTemplate, DeleteTemplate, GetConfig, CreateFolder, RenameItem, MoveItem, SaveTemplate } from '../../../wailsjs/go/app/App';
   import type { app } from '../../../wailsjs/go/models';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { getMethodColor } from '../utils';
   import styles from './TemplateList.module.css';
 
@@ -27,8 +27,9 @@
   let showDeleteConfirm = false;
   let deleteTarget: app.TemplateItem | null = null;
 
-  // Hover state for action buttons
-  let hoveredItem: string | null = null;
+  // Dialog input refs for autofocus
+  let createDialogInput: HTMLInputElement;
+  let renameDialogInput: HTMLInputElement;
 
   // Drag and drop state
   let draggedItem: app.TemplateItem | null = null;
@@ -99,16 +100,14 @@
   }
 
   // Create dialog
-  function openCreateDialog(type: 'template' | 'folder', parentDir: string = '') {
+  async function openCreateDialog(type: 'template' | 'folder', parentDir: string = '') {
     createDialogType = type;
     createDialogName = '';
     createDialogParent = parentDir;
     createDialogError = '';
     showCreateDialog = true;
-    setTimeout(() => {
-      const input = document.querySelector('.create-dialog input') as HTMLInputElement;
-      input?.focus();
-    }, 50);
+    await tick();
+    createDialogInput?.focus();
   }
 
   async function handleCreate() {
@@ -173,18 +172,16 @@
   }
 
   // Rename dialog
-  function openRenameDialog(item: app.TemplateItem) {
+  async function openRenameDialog(item: app.TemplateItem) {
     renameTarget = item;
     renameDialogName = item.name;
     renameDialogError = '';
     showRenameDialog = true;
-    setTimeout(() => {
-      const input = document.querySelector('.rename-dialog input') as HTMLInputElement;
-      if (input) {
-        input.focus();
-        input.select();
-      }
-    }, 50);
+    await tick();
+    if (renameDialogInput) {
+      renameDialogInput.focus();
+      renameDialogInput.select();
+    }
   }
 
   async function handleRename() {
@@ -236,7 +233,6 @@
   function handleDragStart(e: DragEvent, item: app.TemplateItem) {
     if (!e.dataTransfer) return;
     draggedItem = item;
-    hoveredItem = null;
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', item.absolutePath);
   }
@@ -354,8 +350,6 @@
         on:dragend={handleDragEnd}
         on:dragover={(e) => handleDragOver(e, item)}
         on:drop={(e) => handleDrop(e, getTargetDirectory(item))}
-        on:mouseenter={() => !draggedItem && (hoveredItem = item.absolutePath)}
-        on:mouseleave={() => hoveredItem = null}
       >
         <button
           class="{styles['template-item']} {$selectedTemplate?.absolutePath === item.absolutePath ? styles.selected : ''} {item.isDir ? styles.directory : ''}"
@@ -372,27 +366,25 @@
           {/if}
         </button>
 
-        {#if hoveredItem === item.absolutePath}
-          <div class={styles['item-actions']}>
-            {#if item.isDir}
-              <button
-                class={styles['item-action-btn']}
-                on:click|stopPropagation={() => openCreateDialog('template', item.absolutePath)}
-                title="New template in this folder"
-              >+</button>
-              <button
-                class={styles['item-action-btn']}
-                on:click|stopPropagation={() => handleEdit(item)}
-                title="Rename"
-              >✎</button>
-            {/if}
+        <div class={styles['item-actions']}>
+          {#if item.isDir}
             <button
-              class="{styles['item-action-btn']} {styles.delete}"
-              on:click|stopPropagation={() => confirmDelete(item)}
-              title="Delete"
-            >×</button>
-          </div>
-        {/if}
+              class={styles['item-action-btn']}
+              on:click|stopPropagation={() => openCreateDialog('template', item.absolutePath)}
+              title="New template in this folder"
+            >+</button>
+            <button
+              class={styles['item-action-btn']}
+              on:click|stopPropagation={() => handleEdit(item)}
+              title="Rename"
+            >✎</button>
+          {/if}
+          <button
+            class="{styles['item-action-btn']} {styles.delete}"
+            on:click|stopPropagation={() => confirmDelete(item)}
+            title="Delete"
+          >×</button>
+        </div>
       </div>
     {/each}
 
@@ -417,6 +409,7 @@
         type="text"
         placeholder={createDialogType === 'template' ? 'Template name' : 'Folder name'}
         bind:value={createDialogName}
+        bind:this={createDialogInput}
         on:keydown={handleCreateKeydown}
       />
       {#if createDialogError}
@@ -456,6 +449,7 @@
         type="text"
         placeholder="New name"
         bind:value={renameDialogName}
+        bind:this={renameDialogInput}
         on:keydown={handleRenameKeydown}
       />
       {#if renameDialogError}

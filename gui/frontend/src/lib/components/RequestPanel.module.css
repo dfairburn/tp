@@ -322,40 +322,6 @@
   border-bottom: 1px solid var(--border-color);
 }
 
-.pgrid-key {
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-  font-size: 12px;
-  color: var(--accent-color);
-  background: var(--bg-hover);
-  padding: 2px 6px;
-  border-radius: 3px;
-  white-space: nowrap;
-}
-
-.pgrid-value {
-  padding: 4px 7px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-  font-size: 12px;
-  outline: none;
-  min-width: 0;
-}
-
-.pgrid-value:focus {
-  border-color: var(--accent-color);
-}
-
-.pgrid-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-style: italic;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .body-raw-edit {
   flex: 1;

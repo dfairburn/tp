@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/dfairburn/tp/config"
 	"github.com/dfairburn/tp/paths"
@@ -162,5 +161,3 @@ func buildHTTPResponse(statusCode int, status string, header http.Header, body [
 	}
 }
 
-// startTime is referenced only to satisfy the `time` import; actual timing is per-method.
-var _ = time.Now

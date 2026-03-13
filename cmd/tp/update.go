@@ -23,7 +23,7 @@ var updateCmd = &cobra.Command{
 			return fmt.Errorf("go toolchain not found in PATH: %w\nInstall Go from https://go.dev/dl/ or download a release manually", err)
 		}
 
-		fmt.Printf("Current version: %s\n", version)
+		fmt.Printf("Current version: %s\n", getVersion())
 		fmt.Println("Updating tp to latest version...")
 
 		install := exec.Command(gobin, "install", modulePath+"@latest")

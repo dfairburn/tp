@@ -94,3 +94,45 @@ code, pre, .mono {
 .transition {
   transition: all 0.15s ease;
 }
+
+/* ── Shared panel chrome ─────────────────────────────────────────────────── */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.tab {
+  padding: 4px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tab.active {
+  background: var(--accent-color);
+  color: white;
+}

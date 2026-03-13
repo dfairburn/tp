@@ -5,6 +5,7 @@
     getStatusColor, formatHeaders, formatDuration, formatSize,
     getResponseSize, getHighlightedBody, applySearchHighlights,
   } from './ResponsePanel';
+  import styles from './ResponsePanel.module.css';
 
   $: response = $currentResponse;
 
@@ -136,7 +137,7 @@
   $: highlightedBody = response ? getHighlightedBody(response.body, response.contentType) : '';
 </script>
 
-<div class="response-panel">
+<div class={styles['response-panel']}>
   <div class="panel-header">
     <span class="title">Response</span>
     <div class="tabs">
@@ -158,396 +159,66 @@
   </div>
 
   {#if $isExecuting}
-    <div class="loading">
-      <div class="spinner"></div>
+    <div class={styles.loading}>
+      <div class={styles.spinner}></div>
       <p>Executing request...</p>
     </div>
   {:else if response}
     {#if response.error}
-      <div class="error">
-        <span class="error-icon">⚠</span>
-        <span class="error-text">{response.error}</span>
+      <div class={styles.error}>
+        <span class={styles['error-icon']}>⚠</span>
+        <span class={styles['error-text']}>{response.error}</span>
       </div>
     {:else}
-      <div class="status-bar">
-        <span class="status" style="color: {getStatusColor(response.statusCode)}">
+      <div class={styles['status-bar']}>
+        <span class={styles.status} style="color: {getStatusColor(response.statusCode)}">
           {response.statusCode} {response.status.replace(String(response.statusCode), '').trim()}
         </span>
-        <span class="duration">{formatDuration(response.duration)}</span>
-        <span class="size">{formatSize(responseSize)}</span>
-        <span class="content-type">{response.contentType || 'Unknown'}</span>
-        <button class="copy-btn" on:click={copyToClipboard} title="Copy response body">
+        <span class={styles.duration}>{formatDuration(response.duration)}</span>
+        <span class={styles.size}>{formatSize(responseSize)}</span>
+        <span class={styles['content-type']}>{response.contentType || 'Unknown'}</span>
+        <button class={styles['copy-btn']} on:click={copyToClipboard} title="Copy response body">
           Copy
         </button>
       </div>
 
       {#if searchVisible && $responseTab === 'body'}
-        <div class="search-bar">
+        <div class={styles['search-bar']}>
           <input
             bind:this={searchInput}
             bind:value={searchQuery}
             on:keydown={handleSearchKeydown}
-            class="search-input"
+            class={styles['search-input']}
             placeholder="Search…"
             autocomplete="off"
             spellcheck="false"
           />
-          <span class="match-count">
+          <span class={styles['match-count']}>
             {#if searchQuery.trim() && matchCount > 0}
               {matchIndex + 1} / {matchCount}
             {:else if searchQuery.trim()}
               No results
             {/if}
           </span>
-          <button class="search-nav-btn" on:click={prevMatch} disabled={matchCount === 0} title="Previous (Shift+Enter)">↑</button>
-          <button class="search-nav-btn" on:click={nextMatch} disabled={matchCount === 0} title="Next (Enter)">↓</button>
-          <button class="search-close-btn" on:click={closeSearch} title="Close (Esc)">×</button>
+          <button class={styles['search-nav-btn']} on:click={prevMatch} disabled={matchCount === 0} title="Previous (Shift+Enter)">↑</button>
+          <button class={styles['search-nav-btn']} on:click={nextMatch} disabled={matchCount === 0} title="Next (Enter)">↓</button>
+          <button class={styles['search-close-btn']} on:click={closeSearch} title="Close (Esc)">×</button>
         </div>
       {/if}
 
-      <div class="content">
+      <div class={styles.content}>
         {#if $responseTab === 'body'}
-          <pre class="code-block highlighted" bind:this={preElement}>{@html displayBody || 'Empty response'}</pre>
+          <pre class="{styles['code-block']} {styles.highlighted}" bind:this={preElement}>{@html displayBody || 'Empty response'}</pre>
         {:else if $responseTab === 'headers'}
-          <pre class="code-block" bind:this={headersPreElement}>{formatHeaders(response.headers) || 'No headers'}</pre>
+          <pre class={styles['code-block']} bind:this={headersPreElement}>{formatHeaders(response.headers) || 'No headers'}</pre>
         {/if}
       </div>
     {/if}
   {:else}
-    <div class="empty">
+    <div class={styles.empty}>
       <p>No response yet</p>
-      <p class="hint">Execute a request to see the response</p>
+      <p class={styles.hint}>Execute a request to see the response</p>
     </div>
   {/if}
 </div>
 
-<style>
-  .response-panel {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: var(--bg-primary);
-    border-top: 1px solid var(--border-color);
-  }
-
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border-color);
-    background: var(--bg-secondary);
-  }
-
-  .title {
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--text-primary);
-  }
-
-  .tabs {
-    display: flex;
-    gap: 4px;
-  }
-
-  .tab {
-    padding: 4px 12px;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 12px;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.15s;
-  }
-
-  .tab:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .tab.active {
-    background: var(--accent-color);
-    color: white;
-  }
-
-  .status-bar {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border-color);
-    background: var(--bg-secondary);
-  }
-
-  .status {
-    font-weight: 600;
-    font-size: 13px;
-  }
-
-  .duration, .content-type, .size {
-    font-size: 12px;
-    color: var(--text-muted);
-  }
-
-  .size {
-    padding: 2px 6px;
-    background: var(--bg-hover);
-    border-radius: 3px;
-  }
-
-  .copy-btn {
-    margin-left: auto;
-    padding: 4px 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-secondary);
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .copy-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  /* Search bar */
-  .search-bar {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 6px 12px;
-    border-bottom: 1px solid var(--border-color);
-    background: var(--bg-secondary);
-  }
-
-  .search-input {
-    flex: 1;
-    max-width: 280px;
-    padding: 4px 8px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    outline: none;
-  }
-
-  .search-input:focus {
-    border-color: var(--accent-color);
-  }
-
-  .match-count {
-    font-size: 11px;
-    color: var(--text-muted);
-    white-space: nowrap;
-    min-width: 56px;
-  }
-
-  .search-nav-btn {
-    padding: 3px 7px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-secondary);
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.15s;
-    line-height: 1;
-  }
-
-  .search-nav-btn:hover:not(:disabled) {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .search-nav-btn:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-  }
-
-  .search-close-btn {
-    padding: 3px 7px;
-    border: none;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 15px;
-    cursor: pointer;
-    line-height: 1;
-    transition: all 0.15s;
-  }
-
-  .search-close-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  /* Search match highlights (global because they're injected via {@html}) */
-  :global(.search-mark) {
-    background: rgba(255, 213, 0, 0.35);
-    border-radius: 2px;
-    color: inherit;
-  }
-
-  :global(.search-mark-current) {
-    background: rgba(255, 140, 0, 0.6);
-    border-radius: 2px;
-    outline: 1px solid rgba(255, 140, 0, 0.9);
-  }
-
-  /* Light theme adjustments for marks */
-  :global(.light) :global(.search-mark) {
-    background: rgba(255, 213, 0, 0.5);
-  }
-
-  :global(.light) :global(.search-mark-current) {
-    background: rgba(255, 140, 0, 0.5);
-    outline-color: rgba(200, 100, 0, 0.8);
-  }
-
-  .content {
-    flex: 1;
-    overflow: auto;
-    padding: 12px;
-  }
-
-  .code-block {
-    margin: 0;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--text-primary);
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  .loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--text-muted);
-  }
-
-  .spinner {
-    width: 24px;
-    height: 24px;
-    border: 2px solid var(--border-color);
-    border-top-color: var(--accent-color);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  .loading p {
-    margin-top: 12px;
-  }
-
-  .error {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 16px;
-    margin: 12px;
-    background: rgba(249, 62, 62, 0.1);
-    border: 1px solid rgba(249, 62, 62, 0.3);
-    border-radius: 8px;
-    color: #f93e3e;
-  }
-
-  .error-icon {
-    font-size: 16px;
-  }
-
-  .error-text {
-    font-family: 'SF Mono', Monaco, monospace;
-    font-size: 12px;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  .empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--text-muted);
-    text-align: center;
-  }
-
-  .empty p {
-    margin: 4px 0;
-  }
-
-  .hint {
-    font-size: 12px;
-    opacity: 0.7;
-  }
-
-  /* highlight.js syntax highlighting - Dark theme (VS Code inspired) */
-  .code-block.highlighted :global(.hljs-string),
-  .code-block.highlighted :global(.hljs-attr) {
-    color: #ce9178;
-  }
-
-  .code-block.highlighted :global(.hljs-number) {
-    color: #b5cea8;
-  }
-
-  .code-block.highlighted :global(.hljs-literal),
-  .code-block.highlighted :global(.hljs-keyword) {
-    color: #569cd6;
-  }
-
-  .code-block.highlighted :global(.hljs-name),
-  .code-block.highlighted :global(.hljs-tag) {
-    color: #569cd6;
-  }
-
-  .code-block.highlighted :global(.hljs-attribute) {
-    color: #9cdcfe;
-  }
-
-  .code-block.highlighted :global(.hljs-symbol),
-  .code-block.highlighted :global(.hljs-punctuation) {
-    color: #d4d4d4;
-  }
-
-  /* Light theme adjustments */
-  :global(.light) .code-block.highlighted :global(.hljs-string),
-  :global(.light) .code-block.highlighted :global(.hljs-attr) {
-    color: #a31515;
-  }
-
-  :global(.light) .code-block.highlighted :global(.hljs-number) {
-    color: #098658;
-  }
-
-  :global(.light) .code-block.highlighted :global(.hljs-literal),
-  :global(.light) .code-block.highlighted :global(.hljs-keyword) {
-    color: #0000ff;
-  }
-
-  :global(.light) .code-block.highlighted :global(.hljs-name),
-  :global(.light) .code-block.highlighted :global(.hljs-tag) {
-    color: #800000;
-  }
-
-  :global(.light) .code-block.highlighted :global(.hljs-attribute) {
-    color: #ff0000;
-  }
-
-  :global(.light) .code-block.highlighted :global(.hljs-symbol),
-  :global(.light) .code-block.highlighted :global(.hljs-punctuation) {
-    color: #1e1e1e;
-  }
-</style>

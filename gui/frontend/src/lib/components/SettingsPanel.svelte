@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { theme } from '../stores/app';
   import { formatValue } from './SettingsPanel';
+  import styles from './SettingsPanel.module.css';
   import {
     GetVariables,
     RefreshVariables,
@@ -203,138 +204,138 @@
 </script>
 
 {#if isOpen}
-  <div class="overlay" on:click={close} on:keydown={handleKeydown}>
-    <div class="modal" on:click|stopPropagation>
-      <div class="modal-header">
+  <div class={styles.overlay} on:click={close} on:keydown={handleKeydown}>
+    <div class={styles.modal} on:click|stopPropagation>
+      <div class={styles['modal-header']}>
         <h2>Settings</h2>
-        <button class="close-btn" on:click={close}>✕</button>
+        <button class={styles['close-btn']} on:click={close}>✕</button>
       </div>
 
-      <div class="modal-tabs">
-        <button class="tab-btn" class:active={settingsTab === 'variables'} on:click={() => settingsTab = 'variables'}>Variables</button>
-        <button class="tab-btn" class:active={settingsTab === 'config'} on:click={() => settingsTab = 'config'}>Config</button>
+      <div class={styles['modal-tabs']}>
+        <button class="{styles['tab-btn']} {settingsTab === 'variables' ? styles.active : ''}" on:click={() => settingsTab = 'variables'}>Variables</button>
+        <button class="{styles['tab-btn']} {settingsTab === 'config' ? styles.active : ''}" on:click={() => settingsTab = 'config'}>Config</button>
       </div>
 
-      <div class="modal-content">
+      <div class={styles['modal-content']}>
 
         {#if settingsTab === 'variables'}
-          <div class="toolbar">
-            <div class="actions">
-              <button class="btn" on:click={refreshVariables} disabled={isRefreshing}>
+          <div class={styles.toolbar}>
+            <div class={styles.actions}>
+              <button class={styles.btn} on:click={refreshVariables} disabled={isRefreshing}>
                 {isRefreshing ? '⏳' : '⟳'} Refresh
               </button>
-              <button class="btn secondary" on:click={openEnvFile} title="Edit environment variables">
+              <button class="{styles.btn} {styles.secondary}" on:click={openEnvFile} title="Edit environment variables">
                 ✎ Env
               </button>
-              <button class="btn secondary" on:click={openOverridesFile} title="Edit overrides file">
+              <button class="{styles.btn} {styles.secondary}" on:click={openOverridesFile} title="Edit overrides file">
                 ✎ Overrides
               </button>
             </div>
           </div>
 
-          <div class="variables-list">
+          <div class={styles['variables-list']}>
             {#each Object.entries(mergedVariables) as [key, { value, source }]}
-              <div class="variable-row">
-                <span class="var-key">{key}</span>
+              <div class={styles['variable-row']}>
+                <span class={styles['var-key']}>{key}</span>
 
                 {#if editingKey === key}
                   <input
-                    class="var-input"
+                    class={styles['var-input']}
                     bind:value={editValue}
                     on:keydown={handleKeydown}
                     autofocus
                   />
-                  <button class="icon-btn save" on:click={saveEdit} title="Save">✓</button>
-                  <button class="icon-btn cancel" on:click={cancelEdit} title="Cancel">✕</button>
+                  <button class="{styles['icon-btn']} {styles.save}" on:click={saveEdit} title="Save">✓</button>
+                  <button class="{styles['icon-btn']} {styles.cancel}" on:click={cancelEdit} title="Cancel">✕</button>
                 {:else}
-                  <span class="var-value" title={String(value)}>{formatValue(value)}</span>
-                  <span class="var-source" class:override={source === 'override'}>
+                  <span class={styles['var-value']} title={String(value)}>{formatValue(value)}</span>
+                  <span class="{styles['var-source']} {source === 'override' ? styles.override : ''}">
                     {source === 'override' ? 'override' : 'env'}
                   </span>
                   {#if source === 'override'}
-                    <button class="icon-btn edit" on:click={() => startEdit(key, value)} title="Edit">✎</button>
-                    <button class="icon-btn delete" on:click={() => removeOverride(key)} title="Remove">✕</button>
+                    <button class="{styles['icon-btn']} {styles.edit}" on:click={() => startEdit(key, value)} title="Edit">✎</button>
+                    <button class="{styles['icon-btn']} {styles.delete}" on:click={() => removeOverride(key)} title="Remove">✕</button>
                   {/if}
                 {/if}
               </div>
             {:else}
-              <p class="empty">No variables loaded</p>
+              <p class={styles.empty}>No variables loaded</p>
             {/each}
           </div>
 
-          <div class="add-override">
+          <div class={styles['add-override']}>
             <input
-              class="add-input key"
+              class="{styles['add-input']} {styles.key}"
               placeholder="Key"
               bind:value={newKey}
               on:keydown={(e) => e.key === 'Enter' && addOverride()}
             />
             <input
-              class="add-input value"
+              class="{styles['add-input']} {styles.value}"
               placeholder="Value"
               bind:value={newValue}
               on:keydown={(e) => e.key === 'Enter' && addOverride()}
             />
-            <button class="btn small" on:click={addOverride} disabled={!newKey.trim()}>
+            <button class="{styles.btn} {styles.small}" on:click={addOverride} disabled={!newKey.trim()}>
               + Add Override
             </button>
           </div>
 
-          <p class="hint">
+          <p class={styles.hint}>
             Env variables use <code>$(command)</code> for dynamic tokens.
             Overrides take precedence and can be edited inline.
           </p>
 
         {:else if settingsTab === 'config'}
 
-          <div class="config-section">
-            <h3 class="config-heading">Appearance</h3>
-            <div class="config-row">
-              <span class="config-label">Theme</span>
-              <div class="theme-toggle">
-                <button class="theme-btn" class:active={$theme === 'dark'} on:click={() => theme.set('dark')}>
+          <div class={styles['config-section']}>
+            <h3 class={styles['config-heading']}>Appearance</h3>
+            <div class={styles['config-row']}>
+              <span class={styles['config-label']}>Theme</span>
+              <div class={styles['theme-toggle']}>
+                <button class="{styles['theme-btn']} {$theme === 'dark' ? styles.active : ''}" on:click={() => theme.set('dark')}>
                   🌙 Dark
                 </button>
-                <button class="theme-btn" class:active={$theme === 'light'} on:click={() => theme.set('light')}>
+                <button class="{styles['theme-btn']} {$theme === 'light' ? styles.active : ''}" on:click={() => theme.set('light')}>
                   ☀ Light
                 </button>
               </div>
             </div>
           </div>
 
-          <div class="config-section">
-            <h3 class="config-heading">Paths</h3>
-            <div class="config-field">
-              <label class="config-label">Templates Directory</label>
+          <div class={styles['config-section']}>
+            <h3 class={styles['config-heading']}>Paths</h3>
+            <div class={styles['config-field']}>
+              <label class={styles['config-label']}>Templates Directory</label>
               <input
-                class="config-input"
+                class={styles['config-input']}
                 bind:value={editTemplatesDir}
                 placeholder="~/.tp/templates"
                 spellcheck="false"
                 autocomplete="off"
               />
             </div>
-            <div class="config-field">
-              <label class="config-label">Environment File</label>
+            <div class={styles['config-field']}>
+              <label class={styles['config-label']}>Environment File</label>
               <input
-                class="config-input"
+                class={styles['config-input']}
                 bind:value={editEnvFile}
                 placeholder="~/.tp/env.yml"
                 spellcheck="false"
                 autocomplete="off"
               />
             </div>
-            <div class="config-actions">
-              <button class="btn" on:click={saveConfig} disabled={isSavingConfig}>
+            <div class={styles['config-actions']}>
+              <button class={styles.btn} on:click={saveConfig} disabled={isSavingConfig}>
                 {isSavingConfig ? 'Saving…' : 'Save Config'}
               </button>
             </div>
             {#if configSaveError}
-              <p class="config-error">{configSaveError}</p>
+              <p class={styles['config-error']}>{configSaveError}</p>
             {/if}
           </div>
 
-          <p class="hint">
+          <p class={styles.hint}>
             Config file: <code>{configFilePath || '~/.tp/config.yml'}</code><br/>
             Path changes take effect after restarting the app.
           </p>
@@ -343,7 +344,7 @@
       </div>
 
       {#if statusMessage}
-        <div class="status-bar" class:error={statusMessage.includes('Error')}>
+        <div class="{styles['status-bar']} {statusMessage.includes('Error') ? styles.error : ''}">
           {statusMessage}
         </div>
       {/if}
@@ -351,400 +352,3 @@
   </div>
 {/if}
 
-<style>
-  .overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .modal {
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    width: 600px;
-    max-width: 90vw;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  }
-
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .modal-header h2 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 18px;
-    cursor: pointer;
-    padding: 4px 8px;
-  }
-
-  .close-btn:hover {
-    color: var(--text-primary);
-  }
-
-  .modal-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px 20px;
-  }
-
-  .toolbar {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 12px;
-  }
-
-  .actions {
-    display: flex;
-    gap: 8px;
-  }
-
-  .btn {
-    padding: 6px 12px;
-    border: none;
-    border-radius: 4px;
-    background: var(--accent-color);
-    color: white;
-    font-size: 12px;
-    cursor: pointer;
-    transition: opacity 0.15s;
-  }
-
-  .btn:hover:not(:disabled) {
-    opacity: 0.9;
-  }
-
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .btn.secondary {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-  }
-
-  .btn.secondary:hover {
-    background: var(--bg-hover);
-  }
-
-  .btn.small {
-    padding: 4px 10px;
-    font-size: 11px;
-  }
-
-  .variables-list {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    max-height: 280px;
-    overflow-y: auto;
-  }
-
-  .variable-row {
-    display: flex;
-    align-items: center;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border-color);
-    gap: 8px;
-  }
-
-  .variable-row:last-child {
-    border-bottom: none;
-  }
-
-  .var-key {
-    font-family: 'SF Mono', Monaco, monospace;
-    font-size: 12px;
-    color: var(--accent-color);
-    min-width: 70px;
-    font-weight: 500;
-  }
-
-  .var-value {
-    font-family: 'SF Mono', Monaco, monospace;
-    font-size: 12px;
-    color: var(--text-secondary);
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .var-input {
-    flex: 1;
-    padding: 4px 8px;
-    border: 1px solid var(--accent-color);
-    border-radius: 3px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: 'SF Mono', Monaco, monospace;
-    font-size: 12px;
-  }
-
-  .var-input:focus {
-    outline: none;
-    border-color: var(--accent-color);
-  }
-
-  .var-source {
-    font-size: 9px;
-    padding: 2px 5px;
-    border-radius: 3px;
-    background: var(--bg-primary);
-    color: var(--text-muted);
-    border: 1px solid var(--border-color);
-    text-transform: uppercase;
-  }
-
-  .var-source.override {
-    background: rgba(255, 193, 7, 0.15);
-    color: #ffc107;
-    border-color: rgba(255, 193, 7, 0.3);
-  }
-
-  .icon-btn {
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: none;
-    border-radius: 3px;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 12px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .icon-btn:hover {
-    background: var(--bg-hover);
-  }
-
-  .icon-btn.edit:hover {
-    color: var(--accent-color);
-  }
-
-  .icon-btn.delete:hover {
-    color: #f93e3e;
-  }
-
-  .icon-btn.save {
-    color: #49cc90;
-  }
-
-  .icon-btn.cancel:hover {
-    color: #f93e3e;
-  }
-
-  .add-override {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
-    padding: 12px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-  }
-
-  .add-input {
-    padding: 6px 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: 'SF Mono', Monaco, monospace;
-    font-size: 12px;
-  }
-
-  .add-input:focus {
-    outline: none;
-    border-color: var(--accent-color);
-  }
-
-  .add-input.key {
-    width: 100px;
-  }
-
-  .add-input.value {
-    flex: 1;
-  }
-
-  .empty {
-    padding: 24px;
-    text-align: center;
-    color: var(--text-muted);
-    font-size: 13px;
-  }
-
-  .hint {
-    margin-top: 12px;
-    font-size: 11px;
-    color: var(--text-muted);
-    line-height: 1.5;
-  }
-
-  .hint code {
-    background: var(--bg-secondary);
-    padding: 2px 5px;
-    border-radius: 3px;
-    font-family: 'SF Mono', Monaco, monospace;
-    font-size: 10px;
-  }
-
-  /* Tabs */
-  .modal-tabs {
-    display: flex;
-    padding: 0 20px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-color);
-    gap: 0;
-  }
-
-  .tab-btn {
-    padding: 9px 16px;
-    border: none;
-    border-bottom: 2px solid transparent;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 13px;
-    cursor: pointer;
-    margin-bottom: -1px;
-    transition: color 0.15s;
-  }
-
-  .tab-btn:hover {
-    color: var(--text-primary);
-  }
-
-  .tab-btn.active {
-    color: var(--text-primary);
-    border-bottom-color: var(--accent-color);
-  }
-
-  /* Config tab */
-  .config-section {
-    margin-bottom: 20px;
-  }
-
-  .config-heading {
-    margin: 0 0 10px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-muted);
-  }
-
-  .config-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .config-field {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    margin-bottom: 10px;
-  }
-
-  .config-label {
-    font-size: 12px;
-    color: var(--text-secondary);
-  }
-
-  .config-input {
-    padding: 7px 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    outline: none;
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  .config-input:focus {
-    border-color: var(--accent-color);
-  }
-
-  .config-actions {
-    margin-top: 12px;
-  }
-
-  .config-error {
-    margin: 8px 0 0;
-    font-size: 12px;
-    color: #f93e3e;
-  }
-
-  /* Theme toggle */
-  .theme-toggle {
-    display: flex;
-    gap: 4px;
-  }
-
-  .theme-btn {
-    padding: 5px 14px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .theme-btn:hover {
-    border-color: var(--accent-color);
-    color: var(--text-primary);
-  }
-
-  .theme-btn.active {
-    background: var(--accent-color);
-    border-color: var(--accent-color);
-    color: white;
-  }
-
-  .status-bar {
-    padding: 10px 20px;
-    background: rgba(73, 204, 144, 0.15);
-    border-top: 1px solid var(--border-color);
-    color: #49cc90;
-    font-size: 12px;
-    text-align: center;
-  }
-
-  .status-bar.error {
-    background: rgba(249, 62, 62, 0.15);
-    color: #f93e3e;
-  }
-</style>

@@ -9,6 +9,7 @@
     HTTP_METHODS, BODYLESS_METHODS,
     extractVariables, extractHeaderVars, extractUrlOnlyVars, extractVarsFromStrings, extractBodyVarsOnly,
   } from './RequestPanel';
+  import styles from './RequestPanel.module.css';
 
   let envVars: Record<string, any> = {};
   let isRefreshing = false;
@@ -280,7 +281,7 @@
 
 </script>
 
-<div class="request-panel">
+<div class={styles['request-panel']}>
   <div class="panel-header">
     <span class="title">{editing ? 'Edit Template' : 'Request'}</span>
     <div class="tabs">
@@ -302,9 +303,9 @@
   </div>
 
   {#if template}
-    <div class="url-bar">
+    <div class={styles['url-bar']}>
       {#if editing}
-        <select bind:value={editMethod} class="method-select">
+        <select bind:value={editMethod} class={styles['method-select']}>
           {#each HTTP_METHODS as m}
             <option value={m}>{m}</option>
           {/each}
@@ -312,33 +313,33 @@
         <input
           type="text"
           bind:value={editUrl}
-          class="url-input"
+          class={styles['url-input']}
           placeholder="https://..."
           autocomplete="off"
           spellcheck="false"
         />
-        <button class="cancel-btn" on:click={cancelEdit}>Cancel</button>
-        <button class="save-btn" on:click={saveEdit}>Save</button>
+        <button class={styles['cancel-btn']} on:click={cancelEdit}>Cancel</button>
+        <button class={styles['save-btn']} on:click={saveEdit}>Save</button>
       {:else}
-        <span class="method" style="background: {getMethodColor(template.method)}">{template.method || 'GET'}</span>
-        <span class="url" title={template.url}>{previewUrl || template.url || 'No URL'}</span>
-        <button class="execute-btn" on:click={executeRequest} disabled={$isExecuting}>
+        <span class={styles.method} style="background: {getMethodColor(template.method)}">{template.method || 'GET'}</span>
+        <span class={styles.url} title={template.url}>{previewUrl || template.url || 'No URL'}</span>
+        <button class={styles['execute-btn']} on:click={executeRequest} disabled={$isExecuting}>
           {$isExecuting ? '⏳' : '▶'} Execute
         </button>
-        <button class="edit-btn" on:click={enterEditMode} title="Edit template">✎</button>
-        <button class="refresh-btn" on:click={refreshEnvVars} disabled={isRefreshing} title="Refresh environment variables">
+        <button class={styles['edit-btn']} on:click={enterEditMode} title="Edit template">✎</button>
+        <button class={styles['refresh-btn']} on:click={refreshEnvVars} disabled={isRefreshing} title="Refresh environment variables">
           {isRefreshing ? '⏳' : '↻'}
         </button>
       {/if}
     </div>
 
     {#if editing}
-      <div class="description-bar">
-        <span class="desc-label">Description</span>
+      <div class={styles['description-bar']}>
+        <span class={styles['desc-label']}>Description</span>
         <input
           type="text"
           bind:value={editDescription}
-          class="description-input"
+          class={styles['description-input']}
           placeholder="Template description (optional)"
           autocomplete="off"
         />
@@ -346,15 +347,15 @@
     {/if}
 
     {#if saveError}
-      <div class="error-bar">{saveError}</div>
+      <div class={styles['error-bar']}>{saveError}</div>
     {/if}
 
-    <div class="content">
+    <div class={styles.content}>
       {#if $requestTab === 'headers'}
         {#if editing}
-          <div class="edit-section">
+          <div class={styles['edit-section']}>
             {#each editHeaders as _, i}
-              <div class="header-row">
+              <div class={styles['header-row']}>
                 <input
                   type="text"
                   value={editHeaders[i].key}
@@ -371,58 +372,58 @@
                   autocomplete="off"
                   spellcheck="false"
                 />
-                <button class="remove-btn" on:click={() => removeEditHeader(i)}>×</button>
+                <button class={styles['remove-btn']} on:click={() => removeEditHeader(i)}>×</button>
               </div>
             {/each}
-            <button class="add-btn" on:click={addEditHeader}>+ Add Header</button>
+            <button class={styles['add-btn']} on:click={addEditHeader}>+ Add Header</button>
           </div>
         {:else}
           {#if headerVariables.length > 0}
-            <div class="params-grid">
+            <div class={styles['params-grid']}>
               {#each headerVariables as varName}
-                <code class="pgrid-key">{'{{.'}{varName}{'}}'}</code>
+                <code class={styles['pgrid-key']}>{'{{.'}{varName}{'}}'}</code>
                 <input
                   type="text"
-                  class="pgrid-value"
+                  class={styles['pgrid-value']}
                   value={$overrides[varName] ?? ''}
                   on:input={e => updateParamValue(varName, e.currentTarget.value)}
                   placeholder={envVars[varName] != null ? String(envVars[varName]) : 'Value...'}
                   autocomplete="off"
                   spellcheck="false"
                 />
-                <span class="pgrid-desc">{template.descriptions?.[varName] ?? ''}</span>
+                <span class={styles['pgrid-desc']}>{template.descriptions?.[varName] ?? ''}</span>
               {/each}
             </div>
           {/if}
           {#if Object.keys(displayHeaders).length > 0}
-            <div class="headers-grid">
+            <div class={styles['headers-grid']}>
               {#each Object.entries(displayHeaders) as [key, value]}
-                <span class="hgrid-key">{key}</span>
-                <span class="hgrid-value">{value}</span>
+                <span class={styles['hgrid-key']}>{key}</span>
+                <span class={styles['hgrid-value']}>{value}</span>
               {/each}
             </div>
           {:else}
-            <p class="no-content">No headers</p>
+            <p class={styles['no-content']}>No headers</p>
           {/if}
         {/if}
 
       {:else if $requestTab === 'body'}
         {#if editing}
           <textarea
-            class="body-edit"
+            class={styles['body-edit']}
             bind:value={editBody}
             spellcheck="false"
             placeholder="Request body..."
           ></textarea>
           {#if editVariables.length > 0}
-            <div class="edit-params-section">
-              <span class="section-label">Param descriptions</span>
+            <div class={styles['edit-params-section']}>
+              <span class={styles['section-label']}>Param descriptions</span>
               {#each editVariables as varName}
-                <div class="edit-param-row">
+                <div class={styles['edit-param-row']}>
                   <code>{'{{.'}{varName}{'}}'}</code>
                   <input
                     type="text"
-                    class="param-desc-input"
+                    class={styles['param-desc-input']}
                     value={editParamDescriptions[varName] ?? ''}
                     on:input={e => editParamDescriptions[varName] = e.currentTarget.value}
                     placeholder="Description (optional)"
@@ -434,55 +435,54 @@
           {/if}
         {:else}
           {#if urlVars.length > 0}
-            <div class="params-grid">
+            <div class={styles['params-grid']}>
               {#each urlVars as varName}
-                <code class="pgrid-key">{'{{.'}{varName}{'}}'}</code>
+                <code class={styles['pgrid-key']}>{'{{.'}{varName}{'}}'}</code>
                 <input
                   type="text"
-                  class="pgrid-value"
+                  class={styles['pgrid-value']}
                   value={$overrides[varName] ?? ''}
                   on:input={e => updateParamValue(varName, e.currentTarget.value)}
                   placeholder={envVars[varName] != null ? String(envVars[varName]) : 'Value...'}
                   autocomplete="off"
                   spellcheck="false"
                 />
-                <span class="pgrid-desc">{template.descriptions?.[varName] ?? ''}</span>
+                <span class={styles['pgrid-desc']}>{template.descriptions?.[varName] ?? ''}</span>
               {/each}
             </div>
           {/if}
 
           {#if methodHasBody}
             {#if previewError}
-              <div class="preview-error">{previewError}</div>
+              <div class={styles['preview-error']}>{previewError}</div>
             {/if}
 
-            <div class="body-template-split" bind:this={splitContainer}>
+            <div class={styles['body-template-split']} bind:this={splitContainer}>
               <textarea
-                class="body-raw-edit body-direct-edit split-body"
+                class="{styles['body-raw-edit']} {styles['body-direct-edit']} {styles['split-body']}"
                 style="flex: 0 0 {splitPercent}%"
                 bind:value={rawBody}
                 spellcheck="false"
                 placeholder="Request body..."
               ></textarea>
               <div
-                class="resize-handle"
-                class:dragging={isDragging}
+                class="{styles['resize-handle']} {isDragging ? styles.dragging : ''}"
                 on:mousedown={startDrag}
                 role="separator"
                 aria-label="Resize panels"
               ></div>
-              <div class="template-side-panel">
-                <div class="template-panel-header">
-                  <span class="section-label">Template</span>
-                  <button class="save-template-btn" on:click={saveBodyTemplate} title="Save template body to file">Save</button>
+              <div class={styles['template-side-panel']}>
+                <div class={styles['template-panel-header']}>
+                  <span class={styles['section-label']}>Template</span>
+                  <button class={styles['save-template-btn']} on:click={saveBodyTemplate} title="Save template body to file">Save</button>
                 </div>
                 {#if bodyVars.length > 0}
-                  <div class="template-vars-grid">
+                  <div class={styles['template-vars-grid']}>
                     {#each bodyVars as varName}
-                      <code class="pgrid-key">{'{{.'}{varName}{'}}'}</code>
+                      <code class={styles['pgrid-key']}>{'{{.'}{varName}{'}}'}</code>
                       <input
                         type="text"
-                        class="pgrid-value"
+                        class={styles['pgrid-value']}
                         value={$overrides[varName] ?? ''}
                         on:input={e => updateParamValue(varName, e.currentTarget.value)}
                         placeholder={envVars[varName] != null ? String(envVars[varName]) : 'Value...'}
@@ -492,15 +492,15 @@
                     {/each}
                   </div>
                 {:else}
-                  <p class="template-hint">Add {'{{.varName}}'} syntax to the template body to create input variables.</p>
+                  <p class={styles['template-hint']}>Add {'{{.varName}}'} syntax to the template body to create input variables.</p>
                 {/if}
                 <textarea
-                  class="template-raw-edit"
+                  class={styles['template-raw-edit']}
                   bind:value={rawBodyTemplate}
                   spellcheck="false"
                   placeholder="Template body..."
                 ></textarea>
-                <button class="generate-btn" on:click={generateBody}>← Generate body</button>
+                <button class={styles['generate-btn']} on:click={generateBody}>← Generate body</button>
               </div>
             </div>
           {/if}
@@ -508,650 +508,10 @@
       {/if}
     </div>
   {:else}
-    <div class="empty">
+    <div class={styles.empty}>
       <p>Select a template to view request details</p>
-      <p class="hint">Use arrow keys or click to navigate</p>
+      <p class={styles.hint}>Use arrow keys or click to navigate</p>
     </div>
   {/if}
 </div>
 
-<style>
-  .request-panel {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: var(--bg-primary);
-  }
-
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border-color);
-    background: var(--bg-secondary);
-  }
-
-  .title {
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--text-primary);
-  }
-
-  .tabs {
-    display: flex;
-    gap: 4px;
-  }
-
-  .tab {
-    padding: 4px 12px;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 12px;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.15s;
-  }
-
-  .tab:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .tab.active {
-    background: var(--accent-color);
-    color: white;
-  }
-
-  /* View mode url-bar */
-  .url-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border-color);
-    background: var(--bg-secondary);
-  }
-
-  .method {
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    color: white;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-
-  .url {
-    flex: 1;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    color: var(--text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .execute-btn {
-    padding: 6px 16px;
-    border: none;
-    border-radius: 4px;
-    background: var(--accent-color);
-    color: white;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: opacity 0.15s;
-    white-space: nowrap;
-  }
-
-  .execute-btn:hover:not(:disabled) {
-    opacity: 0.9;
-  }
-
-  .execute-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .edit-btn {
-    padding: 6px 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-secondary);
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .edit-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .refresh-btn {
-    padding: 6px 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-secondary);
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .refresh-btn:hover:not(:disabled) {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .refresh-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  /* Edit mode url-bar elements */
-  .method-select {
-    padding: 5px 6px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    outline: none;
-  }
-
-  .method-select:focus {
-    border-color: var(--accent-color);
-  }
-
-  .url-input {
-    flex: 1;
-    padding: 5px 8px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    outline: none;
-    min-width: 0;
-  }
-
-  .url-input:focus {
-    border-color: var(--accent-color);
-  }
-
-  .cancel-btn {
-    padding: 6px 14px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-secondary);
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-  }
-
-  .cancel-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .save-btn {
-    padding: 6px 16px;
-    border: none;
-    border-radius: 4px;
-    background: var(--accent-color);
-    color: white;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: opacity 0.15s;
-    white-space: nowrap;
-  }
-
-  .save-btn:hover {
-    opacity: 0.9;
-  }
-
-  /* Description bar (edit mode only) */
-  .description-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    border-bottom: 1px solid var(--border-color);
-    background: var(--bg-secondary);
-  }
-
-  .desc-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-muted);
-    white-space: nowrap;
-  }
-
-  .description-input {
-    flex: 1;
-    padding: 4px 8px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-size: 12px;
-    outline: none;
-  }
-
-  .description-input:focus {
-    border-color: var(--accent-color);
-  }
-
-  /* Error bar (save errors) */
-  .error-bar {
-    padding: 6px 12px;
-    background: rgba(249, 62, 62, 0.1);
-    border-bottom: 1px solid rgba(249, 62, 62, 0.3);
-    color: #f93e3e;
-    font-size: 12px;
-  }
-
-  /* Preview render error (inline, inside content area) */
-  .preview-error {
-    padding: 4px 8px;
-    margin-bottom: 8px;
-    background: rgba(249, 62, 62, 0.08);
-    border: 1px solid rgba(249, 62, 62, 0.25);
-    border-radius: 4px;
-    color: #f93e3e;
-    font-size: 11px;
-  }
-
-  /* Content area */
-  .content {
-    flex: 1;
-    overflow: auto;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* Edit mode: headers */
-  .edit-section {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .header-row {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  }
-
-  .header-row input {
-    flex: 1;
-    padding: 6px 8px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    outline: none;
-    min-width: 0;
-  }
-
-  .header-row input:focus {
-    border-color: var(--accent-color);
-  }
-
-  .remove-btn {
-    padding: 4px 8px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-secondary);
-    color: var(--text-muted);
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.15s;
-    line-height: 1;
-  }
-
-  .remove-btn:hover {
-    background: #f93e3e;
-    border-color: #f93e3e;
-    color: white;
-  }
-
-  .add-btn {
-    align-self: flex-start;
-    margin-top: 4px;
-    padding: 5px 12px;
-    border: 1px dashed var(--border-color);
-    border-radius: 4px;
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .add-btn:hover {
-    border-color: var(--accent-color);
-    color: var(--accent-color);
-  }
-
-  /* Edit mode: body */
-  .body-edit {
-    flex: 1;
-    width: 100%;
-    min-height: 200px;
-    padding: 8px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    line-height: 1.5;
-    resize: vertical;
-    outline: none;
-    box-sizing: border-box;
-  }
-
-  .body-edit:focus {
-    border-color: var(--accent-color);
-  }
-
-  /* View mode: params grid (key | value | description) */
-  .params-grid {
-    display: grid;
-    grid-template-columns: auto 1fr minmax(0, 200px);
-    align-items: center;
-    gap: 4px 8px;
-    padding-bottom: 10px;
-    margin-bottom: 10px;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .pgrid-key {
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    color: var(--accent-color);
-    background: var(--bg-hover);
-    padding: 2px 6px;
-    border-radius: 3px;
-    white-space: nowrap;
-  }
-
-  .pgrid-value {
-    padding: 4px 7px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    outline: none;
-    min-width: 0;
-  }
-
-  .pgrid-value:focus {
-    border-color: var(--accent-color);
-  }
-
-  .pgrid-desc {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-style: italic;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .body-raw-edit {
-    flex: 1;
-    width: 100%;
-    min-height: 120px;
-    padding: 8px;
-    border: 1px solid var(--accent-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    line-height: 1.5;
-    resize: none;
-    outline: none;
-    box-sizing: border-box;
-  }
-
-  .body-direct-edit {
-    min-height: 200px;
-    resize: vertical;
-  }
-
-  /* View mode: rendered headers grid */
-  .headers-grid {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 4px 12px;
-    align-items: baseline;
-  }
-
-  .hgrid-key {
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    color: var(--text-muted);
-    white-space: nowrap;
-  }
-
-  .hgrid-value {
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    color: var(--text-primary);
-    word-break: break-all;
-  }
-
-  .no-content {
-    margin: 0;
-    font-size: 12px;
-    color: var(--text-muted);
-  }
-
-  /* Edit mode: param descriptions beneath body textarea */
-  .edit-params-section {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    padding-top: 8px;
-    margin-top: 6px;
-    border-top: 1px solid var(--border-color);
-  }
-
-  .section-label {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-bottom: 2px;
-  }
-
-  .edit-param-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .edit-param-row code {
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    color: var(--accent-color);
-    background: var(--bg-hover);
-    padding: 2px 6px;
-    border-radius: 3px;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .param-desc-input {
-    flex: 1;
-    padding: 4px 7px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-size: 12px;
-    outline: none;
-    min-width: 0;
-  }
-
-  .param-desc-input:focus {
-    border-color: var(--accent-color);
-  }
-
-  /* Body/template split layout */
-  .body-template-split {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .split-body {
-    min-width: 0;
-    resize: none !important;
-  }
-
-  .resize-handle {
-    flex: 0 0 5px;
-    cursor: col-resize;
-    background: var(--border-color);
-    border-radius: 2px;
-    margin: 0 3px;
-    transition: background 0.15s;
-    user-select: none;
-  }
-
-  .resize-handle:hover,
-  .resize-handle.dragging {
-    background: var(--accent-color);
-  }
-
-  .template-side-panel {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    padding: 8px;
-    background: var(--bg-secondary);
-    overflow: auto;
-    min-height: 0;
-  }
-
-  .template-panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .template-vars-grid {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    align-items: center;
-    gap: 4px 6px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .template-hint {
-    margin: 0;
-    font-size: 11px;
-    color: var(--text-muted);
-    font-style: italic;
-  }
-
-  .template-raw-edit {
-    flex: 1;
-    min-height: 80px;
-    padding: 6px 8px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 12px;
-    line-height: 1.5;
-    resize: none;
-    outline: none;
-    box-sizing: border-box;
-  }
-
-  .template-raw-edit:focus {
-    border-color: var(--accent-color);
-  }
-
-  .generate-btn {
-    padding: 6px;
-    border: none;
-    border-radius: 4px;
-    background: var(--accent-color);
-    color: white;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: opacity 0.15s;
-    flex-shrink: 0;
-  }
-
-  .generate-btn:hover {
-    opacity: 0.9;
-  }
-
-  .save-template-btn {
-    padding: 3px 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-secondary);
-    font-size: 11px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .save-template-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  /* Empty state */
-  .empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--text-muted);
-    text-align: center;
-  }
-
-  .empty p {
-    margin: 4px 0;
-  }
-
-  .hint {
-    font-size: 12px;
-    opacity: 0.7;
-  }
-
-</style>

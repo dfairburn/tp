@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import type { main } from '../../wailsjs/go/models';
+import type { app } from '../../wailsjs/go/models';
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -34,18 +34,18 @@ function saveToStorage(key: string, value: unknown): void {
 }
 
 // Template list state
-export const templates = writable<main.TemplateItem[]>([]);
-export const selectedTemplate = writable<main.TemplateItem | null>(null);
+export const templates = writable<app.TemplateItem[]>([]);
+export const selectedTemplate = writable<app.TemplateItem | null>(null);
 export const selectedTemplatePath = writable<string>(loadFromStorage(STORAGE_KEYS.selectedTemplatePath, ''));
 export const expandedDirs = writable<Set<string>>(new Set(loadFromStorage<string[]>(STORAGE_KEYS.expandedDirs, [])));
 export const searchQuery = writable<string>('');
 
 // Response state
-export const currentResponse = writable<main.HTTPResponse | null>(null);
+export const currentResponse = writable<app.HTTPResponse | null>(null);
 export const isExecuting = writable<boolean>(false);
 
 // Response cache: Map of template path -> response
-export const responseCache = writable<Record<string, main.HTTPResponse>>(
+export const responseCache = writable<Record<string, app.HTTPResponse>>(
   loadFromStorage(STORAGE_KEYS.responseCache, {})
 );
 
@@ -140,11 +140,11 @@ currentResponse.subscribe(response => {
 });
 
 // Helper to restore selected template from templates list
-export function restoreSelectedTemplate(items: main.TemplateItem[]): main.TemplateItem | null {
+export function restoreSelectedTemplate(items: app.TemplateItem[]): app.TemplateItem | null {
   const savedPath = get(selectedTemplatePath);
   if (!savedPath) return null;
   
-  function findByPath(items: main.TemplateItem[]): main.TemplateItem | null {
+  function findByPath(items: app.TemplateItem[]): app.TemplateItem | null {
     for (const item of items) {
       if (item.absolutePath === savedPath) {
         return item;
@@ -166,8 +166,8 @@ export const filteredTemplates = derived(
   ([$templates, $searchQuery, $expandedDirs]) => {
     const query = $searchQuery.toLowerCase();
     
-    function flattenAndFilter(items: main.TemplateItem[], depth: number = 0): main.TemplateItem[] {
-      const result: main.TemplateItem[] = [];
+    function flattenAndFilter(items: app.TemplateItem[], depth: number = 0): app.TemplateItem[] {
+      const result: app.TemplateItem[] = [];
       
       for (const item of items) {
         const matches = !query || item.name.toLowerCase().includes(query);
@@ -188,7 +188,7 @@ export const filteredTemplates = derived(
       return result;
     }
     
-    function hasMatchingDescendants(item: main.TemplateItem, q: string): boolean {
+    function hasMatchingDescendants(item: app.TemplateItem, q: string): boolean {
       if (!item.children) return false;
       return item.children.some(child => 
         child.name.toLowerCase().includes(q) || 

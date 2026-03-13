@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { theme } from '../stores/app';
+  import { formatValue } from './SettingsPanel';
   import {
     GetVariables,
     RefreshVariables,
@@ -11,7 +12,7 @@
     SaveOverrides,
     GetConfig,
     SaveConfig,
-  } from '../../../wailsjs/go/main/App';
+  } from '../../../wailsjs/go/app/App';
 
   export let isOpen = false;
 
@@ -186,17 +187,6 @@
     editingKey = null;
     isOpen = false;
     dispatch('close');
-  }
-
-  function formatValue(value: any): string {
-    if (typeof value === 'object') {
-      return JSON.stringify(value, null, 2);
-    }
-    const str = String(value);
-    if (str.length > 40) {
-      return str.substring(0, 15) + '...' + str.substring(str.length - 10);
-    }
-    return str;
   }
 
   function handleKeydown(e: KeyboardEvent) {

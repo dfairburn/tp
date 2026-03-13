@@ -4,10 +4,40 @@
   import ResponsePanel from './lib/components/ResponsePanel.svelte';
   import SettingsPanel from './lib/components/SettingsPanel.svelte';
   import { theme, selectedTemplate, isExecuting, currentResponse } from './lib/stores/app';
-  import { ExecuteTemplateWithOverrides } from '../wailsjs/go/main/App';
-  import { onMount } from 'svelte';
+  import { ExecuteTemplateWithOverrides } from '../wailsjs/go/app/App';
+  import { onMount, onDestroy } from 'svelte';
 
   let settingsOpen = false;
+
+  // Vertical split between request and response panels
+  let vertSplitPercent = 50;
+  let vertIsDragging = false;
+  let panelsContainer: HTMLElement | null = null;
+
+  function startVertDrag(e: MouseEvent) {
+    vertIsDragging = true;
+    e.preventDefault();
+    window.addEventListener('mousemove', onVertDragMove);
+    window.addEventListener('mouseup', stopVertDrag);
+  }
+
+  function onVertDragMove(e: MouseEvent) {
+    if (!panelsContainer) return;
+    const rect = panelsContainer.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    vertSplitPercent = Math.max(15, Math.min(85, (y / rect.height) * 100));
+  }
+
+  function stopVertDrag() {
+    vertIsDragging = false;
+    window.removeEventListener('mousemove', onVertDragMove);
+    window.removeEventListener('mouseup', stopVertDrag);
+  }
+
+  onDestroy(() => {
+    window.removeEventListener('mousemove', onVertDragMove);
+    window.removeEventListener('mouseup', stopVertDrag);
+  });
 
   // Handle keyboard shortcuts
   function handleKeydown(e: KeyboardEvent) {
@@ -101,11 +131,20 @@
         </button>
       </div>
     </div>
-    <div class="request-area">
-      <RequestPanel />
-    </div>
-    <div class="response-area">
-      <ResponsePanel />
+    <div class="panels" bind:this={panelsContainer}>
+      <div class="request-area" style="flex: 0 0 {vertSplitPercent}%">
+        <RequestPanel />
+      </div>
+      <div
+        class="vert-resize-handle"
+        class:dragging={vertIsDragging}
+        on:mousedown={startVertDrag}
+        role="separator"
+        aria-label="Resize request/response panels"
+      ></div>
+      <div class="response-area">
+        <ResponsePanel />
+      </div>
     </div>
   </div>
   
@@ -168,6 +207,15 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    min-height: 0;
+  }
+
+  .panels {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .toolbar {
@@ -216,14 +264,26 @@
   }
 
   .request-area {
-    flex: 1;
-    min-height: 200px;
+    min-height: 0;
     overflow: hidden;
+  }
+
+  .vert-resize-handle {
+    flex: 0 0 5px;
+    cursor: row-resize;
+    background: var(--border-color);
+    transition: background 0.15s;
+    user-select: none;
+  }
+
+  .vert-resize-handle:hover,
+  .vert-resize-handle.dragging {
+    background: var(--accent-color);
   }
 
   .response-area {
     flex: 1;
-    min-height: 200px;
+    min-height: 0;
     overflow: hidden;
   }
 </style>

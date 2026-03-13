@@ -1,11 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
   import { selectedTemplate, requestTab, overrides, isExecuting, currentResponse, paramValuesCache, bodyCache } from '../stores/app';
-  import { ExecuteTemplateWithBodyAndOverrides, SaveTemplate, GetTemplate, PreviewTemplate, GetVariables, RefreshVariables } from '../../../wailsjs/go/main/App';
+  import { ExecuteTemplateWithBodyAndOverrides, SaveTemplate, GetTemplate, PreviewTemplate, PreviewBody, GetVariables, RefreshVariables } from '../../../wailsjs/go/app/App';
   import yaml from 'js-yaml';
-
-  const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+  import { getMethodColor } from '../utils';
+  import {
+    HTTP_METHODS, BODYLESS_METHODS,
+    extractVariables, extractHeaderVars, extractUrlOnlyVars, extractVarsFromStrings, extractBodyVarsOnly,
+  } from './RequestPanel';
 
   let envVars: Record<string, any> = {};
   let isRefreshing = false;
@@ -36,19 +39,20 @@
       saveError = '';
       const cached = get(bodyCache);
       rawBody = (path && cached[path] !== undefined) ? cached[path] : ($selectedTemplate?.body || '');
+      rawBodyTemplate = $selectedTemplate?.body || '';
       previewUrl = '';
       previewHeaders = {};
       previewError = '';
     }
   }
 
-  const BODYLESS_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-
   // View mode derived state
   $: usedVariables = template ? extractVariables(template) : [];
   $: headerVariables = template ? extractHeaderVars(template) : [];
   $: urlVars = template ? extractUrlOnlyVars(template) : [];
   $: methodHasBody = !BODYLESS_METHODS.has((template?.method || 'GET').toUpperCase());
+  $: bodyVars = template ? extractBodyVarsOnly(template) : [];
+  $: hasBodyTemplate = bodyVars.length > 0;
   // Go-rendered preview state (URL only — body is always directly editable)
   let previewUrl = '';
   let previewHeaders: Record<string, string> = {};
@@ -58,6 +62,38 @@
 
   // Raw body editing — persisted per-template in session (localStorage), not saved to file
   let rawBody = '';
+  // Template raw body (the {{.varName}} template text, separate from the rendered rawBody)
+  let rawBodyTemplate = '';
+
+  // Template panel split/resize state
+  let splitPercent = 50;
+  let isDragging = false;
+  let splitContainer: HTMLElement | null = null;
+
+  function startDrag(e: MouseEvent) {
+    isDragging = true;
+    e.preventDefault();
+    window.addEventListener('mousemove', onDragMove);
+    window.addEventListener('mouseup', stopDrag);
+  }
+
+  function onDragMove(e: MouseEvent) {
+    if (!splitContainer) return;
+    const rect = splitContainer.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    splitPercent = Math.max(20, Math.min(80, (x / rect.width) * 100));
+  }
+
+  function stopDrag() {
+    isDragging = false;
+    window.removeEventListener('mousemove', onDragMove);
+    window.removeEventListener('mouseup', stopDrag);
+  }
+
+  onDestroy(() => {
+    window.removeEventListener('mousemove', onDragMove);
+    window.removeEventListener('mouseup', stopDrag);
+  });
 
   // Debounce bodyCache writes: avoid a localStorage write on every keystroke
   let _bodyCacheTimer: ReturnType<typeof setTimeout> | null = null;
@@ -182,19 +218,6 @@
     }
   }
 
-  function getMethodColor(method: string): string {
-    const colors: Record<string, string> = {
-      GET: '#61affe',
-      POST: '#49cc90',
-      PUT: '#fca130',
-      PATCH: '#50e3c2',
-      DELETE: '#f93e3e',
-      HEAD: '#9012fe',
-      OPTIONS: '#0d5aa7',
-    };
-    return colors[method?.toUpperCase()] || '#999';
-  }
-
   async function doPreview() {
     if (!template || editing) return;
     const result = await PreviewTemplate(template.absolutePath, $overrides);
@@ -211,59 +234,50 @@
   // Trigger preview whenever template or overrides change (not while editing).
   $: if (!editing) { template; $overrides; schedulePreview(); }
 
-  // Extract variable name from a single {{...}} block inner content,
-  // matching the same patterns as handlers/use-help.go ParseUsages.
-  function extractVarFromBlock(inner: string): string | null {
-    let m: RegExpMatchArray | null;
-    if ((m = inner.match(/^\s*\.(\S+)\s*$/)))                           return m[1]; // {{.name}}
-    if ((m = inner.match(/^\s*optional.*\.(\S+)\s*$/)))                 return m[1]; // {{optional ... .name}}
-    if ((m = inner.match(/^\s*timestamp\s+\.(\S+)\s*$/)))               return m[1]; // {{timestamp .name}}
-    if ((m = inner.match(/^\s*default\s+\.(\S+)\s+"[^"]*"\s*$/)))       return m[1]; // {{default .name "val"}}
-    if ((m = inner.match(/^\s*default\s+"[^"]*"\s+\.(\S+)\s*$/)))       return m[1]; // {{default "val" .name}}
-    return null;
-  }
-
-  function extractVarsFromStr(str: string, vars: Set<string>) {
-    const blockRegex = /\{\{([^}]+)\}\}/g;
-    let block: RegExpExecArray | null;
-    while ((block = blockRegex.exec(str)) !== null) {
-      const v = extractVarFromBlock(block[1]);
-      if (v) vars.add(v);
+  async function generateBody() {
+    if (!rawBodyTemplate) return;
+    previewError = '';
+    try {
+      const result = await PreviewBody(rawBodyTemplate, $overrides);
+      if (result.error) {
+        previewError = result.error;
+      } else {
+        rawBody = result.body;
+      }
+    } catch (err) {
+      previewError = String(err);
     }
   }
 
-  function extractVariables(tmpl: typeof template): string[] {
-    if (!tmpl) return [];
-    const vars = new Set<string>();
-    if (tmpl.url) extractVarsFromStr(tmpl.url, vars);
-    if (tmpl.headers) {
-      for (const value of Object.values(tmpl.headers)) extractVarsFromStr(String(value), vars);
+  async function saveBodyTemplate() {
+    if (!template) return;
+    previewError = '';
+    try {
+      const headers: Record<string, string> = {};
+      for (const [k, v] of Object.entries(template.headers || {})) {
+        headers[k] = String(v);
+      }
+      const templateObj: Record<string, any> = {
+        method: template.method,
+        url: template.url,
+        headers,
+        body: rawBodyTemplate,
+      };
+      const descriptions = template.descriptions || {};
+      if (Object.keys(descriptions).length > 0) {
+        templateObj.descriptions = descriptions;
+      }
+      const yamlContent = yaml.dump(templateObj);
+      await SaveTemplate(template.absolutePath, yamlContent);
+      const updated = await GetTemplate(template.absolutePath);
+      selectedTemplate.set(updated);
+      rawBodyTemplate = updated.body || '';
+    } catch (err) {
+      previewError = String(err);
     }
-    if (tmpl.body) extractVarsFromStr(tmpl.body, vars);
-    return Array.from(vars).sort();
   }
 
-  function extractHeaderVars(tmpl: typeof template): string[] {
-    if (!tmpl?.headers) return [];
-    const vars = new Set<string>();
-    for (const value of Object.values(tmpl.headers)) extractVarsFromStr(String(value), vars);
-    return Array.from(vars).sort();
-  }
 
-  function extractUrlOnlyVars(tmpl: typeof template): string[] {
-    if (!tmpl?.url) return [];
-    const vars = new Set<string>();
-    extractVarsFromStr(tmpl.url, vars);
-    return Array.from(vars).sort();
-  }
-
-  function extractVarsFromStrings(url: string, headers: { key: string; value: string }[], body: string): string[] {
-    const vars = new Set<string>();
-    extractVarsFromStr(url, vars);
-    for (const h of headers) extractVarsFromStr(h.value, vars);
-    extractVarsFromStr(body, vars);
-    return Array.from(vars).sort();
-  }
 </script>
 
 <div class="request-panel">
@@ -442,12 +456,53 @@
               <div class="preview-error">{previewError}</div>
             {/if}
 
-            <textarea
-              class="body-raw-edit body-direct-edit"
-              bind:value={rawBody}
-              spellcheck="false"
-              placeholder="Request body..."
-            ></textarea>
+            <div class="body-template-split" bind:this={splitContainer}>
+              <textarea
+                class="body-raw-edit body-direct-edit split-body"
+                style="flex: 0 0 {splitPercent}%"
+                bind:value={rawBody}
+                spellcheck="false"
+                placeholder="Request body..."
+              ></textarea>
+              <div
+                class="resize-handle"
+                class:dragging={isDragging}
+                on:mousedown={startDrag}
+                role="separator"
+                aria-label="Resize panels"
+              ></div>
+              <div class="template-side-panel">
+                <div class="template-panel-header">
+                  <span class="section-label">Template</span>
+                  <button class="save-template-btn" on:click={saveBodyTemplate} title="Save template body to file">Save</button>
+                </div>
+                {#if bodyVars.length > 0}
+                  <div class="template-vars-grid">
+                    {#each bodyVars as varName}
+                      <code class="pgrid-key">{'{{.'}{varName}{'}}'}</code>
+                      <input
+                        type="text"
+                        class="pgrid-value"
+                        value={$overrides[varName] ?? ''}
+                        on:input={e => updateParamValue(varName, e.currentTarget.value)}
+                        placeholder={envVars[varName] != null ? String(envVars[varName]) : 'Value...'}
+                        autocomplete="off"
+                        spellcheck="false"
+                      />
+                    {/each}
+                  </div>
+                {:else}
+                  <p class="template-hint">Add {'{{.varName}}'} syntax to the template body to create input variables.</p>
+                {/if}
+                <textarea
+                  class="template-raw-edit"
+                  bind:value={rawBodyTemplate}
+                  spellcheck="false"
+                  placeholder="Template body..."
+                ></textarea>
+                <button class="generate-btn" on:click={generateBody}>← Generate body</button>
+              </div>
+            </div>
           {/if}
         {/if}
       {/if}
@@ -961,6 +1016,122 @@
 
   .param-desc-input:focus {
     border-color: var(--accent-color);
+  }
+
+  /* Body/template split layout */
+  .body-template-split {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .split-body {
+    min-width: 0;
+    resize: none !important;
+  }
+
+  .resize-handle {
+    flex: 0 0 5px;
+    cursor: col-resize;
+    background: var(--border-color);
+    border-radius: 2px;
+    margin: 0 3px;
+    transition: background 0.15s;
+    user-select: none;
+  }
+
+  .resize-handle:hover,
+  .resize-handle.dragging {
+    background: var(--accent-color);
+  }
+
+  .template-side-panel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 8px;
+    background: var(--bg-secondary);
+    overflow: auto;
+    min-height: 0;
+  }
+
+  .template-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .template-vars-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 4px 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .template-hint {
+    margin: 0;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .template-raw-edit {
+    flex: 1;
+    min-height: 80px;
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .template-raw-edit:focus {
+    border-color: var(--accent-color);
+  }
+
+  .generate-btn {
+    padding: 6px;
+    border: none;
+    border-radius: 4px;
+    background: var(--accent-color);
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+  }
+
+  .generate-btn:hover {
+    opacity: 0.9;
+  }
+
+  .save-template-btn {
+    padding: 3px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .save-template-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 
   /* Empty state */

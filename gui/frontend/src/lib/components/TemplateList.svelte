@@ -1,9 +1,10 @@
 <script lang="ts">
   import { get } from 'svelte/store';
   import { templates, selectedTemplate, expandedDirs, searchQuery, filteredTemplates, toggleDirectory } from '../stores/app';
-  import { GetTemplates, GetTemplate, CreateTemplate, DeleteTemplate, GetConfig, CreateFolder, RenameItem, MoveItem, SaveTemplate } from '../../../wailsjs/go/main/App';
-  import type { main } from '../../../wailsjs/go/models';
+  import { GetTemplates, GetTemplate, CreateTemplate, DeleteTemplate, GetConfig, CreateFolder, RenameItem, MoveItem, SaveTemplate } from '../../../wailsjs/go/app/App';
+  import type { app } from '../../../wailsjs/go/models';
   import { onMount } from 'svelte';
+  import { getMethodColor } from '../utils';
 
   let searchInput = '';
   let templatesRootDir = '';
@@ -17,19 +18,19 @@
 
   // Rename dialog state
   let showRenameDialog = false;
-  let renameTarget: main.TemplateItem | null = null;
+  let renameTarget: app.TemplateItem | null = null;
   let renameDialogName = '';
   let renameDialogError = '';
 
   // Delete confirmation state
   let showDeleteConfirm = false;
-  let deleteTarget: main.TemplateItem | null = null;
+  let deleteTarget: app.TemplateItem | null = null;
 
   // Hover state for action buttons
   let hoveredItem: string | null = null;
 
   // Drag and drop state
-  let draggedItem: main.TemplateItem | null = null;
+  let draggedItem: app.TemplateItem | null = null;
   let dropTargetPath: string | null = null;
 
   onMount(async () => {
@@ -52,7 +53,7 @@
 
       if (currentExpanded.size === 0) {
         const dirs = new Set<string>();
-        function collectDirs(items: main.TemplateItem[]) {
+        function collectDirs(items: app.TemplateItem[]) {
           for (const item of items) {
             if (item.isDir) {
               dirs.add(item.absolutePath);
@@ -68,7 +69,7 @@
     }
   }
 
-  function findByPath(items: main.TemplateItem[], path: string): main.TemplateItem | null {
+  function findByPath(items: app.TemplateItem[], path: string): app.TemplateItem | null {
     for (const item of items) {
       if (item.absolutePath === path) return item;
       if (item.children) {
@@ -84,25 +85,12 @@
     searchQuery.set(target.value);
   }
 
-  function selectItem(item: main.TemplateItem) {
+  function selectItem(item: app.TemplateItem) {
     if (item.isDir) {
       toggleDirectory(item.absolutePath);
     } else {
       selectedTemplate.set(item);
     }
-  }
-
-  function getMethodColor(method: string): string {
-    const colors: Record<string, string> = {
-      'GET': '#61affe',
-      'POST': '#49cc90',
-      'PUT': '#fca130',
-      'PATCH': '#50e3c2',
-      'DELETE': '#f93e3e',
-      'HEAD': '#9012fe',
-      'OPTIONS': '#0d5aa7',
-    };
-    return colors[method?.toUpperCase()] || '#999';
   }
 
   function isExpanded(path: string): boolean {
@@ -154,7 +142,7 @@
   }
 
   // Delete
-  function confirmDelete(item: main.TemplateItem) {
+  function confirmDelete(item: app.TemplateItem) {
     deleteTarget = item;
     showDeleteConfirm = true;
   }
@@ -175,7 +163,7 @@
   }
 
   // Edit: rename for folders, select for files (editing happens in RequestPanel)
-  async function handleEdit(item: main.TemplateItem) {
+  async function handleEdit(item: app.TemplateItem) {
     if (item.isDir) {
       openRenameDialog(item);
     } else {
@@ -184,7 +172,7 @@
   }
 
   // Rename dialog
-  function openRenameDialog(item: main.TemplateItem) {
+  function openRenameDialog(item: app.TemplateItem) {
     renameTarget = item;
     renameDialogName = item.name;
     renameDialogError = '';
@@ -237,14 +225,14 @@
   const SCROLL_ZONE = 40;
   const SCROLL_SPEED = 8;
 
-  function getTargetDirectory(item: main.TemplateItem): string {
+  function getTargetDirectory(item: app.TemplateItem): string {
     if (item.isDir) return item.absolutePath;
     const idx = item.absolutePath.lastIndexOf('/');
     if (idx === -1) return templatesRootDir || '';
     return item.absolutePath.substring(0, idx);
   }
 
-  function handleDragStart(e: DragEvent, item: main.TemplateItem) {
+  function handleDragStart(e: DragEvent, item: app.TemplateItem) {
     if (!e.dataTransfer) return;
     draggedItem = item;
     hoveredItem = null;
@@ -286,7 +274,7 @@
     }
   }
 
-  function handleDragOver(e: DragEvent, item: main.TemplateItem) {
+  function handleDragOver(e: DragEvent, item: app.TemplateItem) {
     if (!draggedItem) return;
     const targetDir = getTargetDirectory(item);
     if (draggedItem.absolutePath === targetDir) return;

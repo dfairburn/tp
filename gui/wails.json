@@ -1,0 +1,23 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "tp-gui",
+  "outputfilename": "tp-gui",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "tp",
+    "email": ""
+  },
+  "info": {
+    "productVersion": "0.1.0",
+    "productName": "tp - Template HTTP Client",
+    "copyright": "MIT License",
+    "comments": "Cross-platform GUI for tp template HTTP client"
+  },
+  "mac": {
+    "entitlements": "build/darwin/entitlements.plist",
+    "icon": "build/darwin/icon.icns"
+  }
+}

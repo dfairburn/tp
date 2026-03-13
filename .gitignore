@@ -1,3 +1,4 @@
+.DS_Store
 .idea
 bin
 .tp.log
@@ -5,3 +6,8 @@ vars.yaml
 templates
 dist/
 internal/insomnia/fixtures
+
+# GUI build artifacts
+gui/build/bin/
+gui/frontend/node_modules/
+gui/frontend/dist/

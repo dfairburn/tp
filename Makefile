@@ -20,9 +20,11 @@ RESET  := $(shell tput -Txterm sgr0)
 all: help
 
 ## Build:
+LDFLAGS=-ldflags "-X main.version=$(VERSION)"
+
 build: vendor ## Build your project and put the output binary in bin/
 	mkdir -p bin
-	GO111MODULE=on $(GOCMD) build -mod vendor -o bin/$(CLI_BINARY_NAME) ./cmd/tp
+	GO111MODULE=on $(GOCMD) build -mod vendor $(LDFLAGS) -o bin/$(CLI_BINARY_NAME) ./cmd/tp
 
 clean: ## Remove build related file
 	rm -fr ./bin

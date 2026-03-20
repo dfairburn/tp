@@ -4,9 +4,7 @@ GOVET=$(GOCMD) vet
 PROJECT_NAME=tp
 CLI_BINARY_NAME=tp
 UI_BINARY_NAME=tpui
-VERSION?=0.0.0
 SERVICE_PORT?=3000
-DOCKER_REGISTRY?= #if set it should finished by /
 EXPORT_RESULT?=false # for CI please set EXPORT_RESULT to true
 
 GREEN  := $(shell tput -Txterm setaf 2)
@@ -76,17 +74,6 @@ ifeq ($(EXPORT_RESULT), true)
 	$(eval OUTPUT_OPTIONS = | tee /dev/tty | yamllint-checkstyle > yamllint-checkstyle.xml)
 endif
 	docker run --rm -it -v $(shell pwd):/data cytopia/yamllint -f parsable $(shell git ls-files '*.yml' '*.yaml') $(OUTPUT_OPTIONS)
-
-## Docker:
-docker-build: ## Use the dockerfile to build the container
-	docker build --rm --tag $(PROJECT_NAME) .
-
-docker-release: ## Release the container with tag latest and version
-	docker tag $(PROJECT_NAME) $(DOCKER_REGISTRY)$(PROJECT_NAME):latest
-	docker tag $(PROJECT_NAME) $(DOCKER_REGISTRY)$(PROJECT_NAME):$(VERSION)
-# Push the docker images
-	docker push $(DOCKER_REGISTRY)$(PROJECT_NAME):latest
-	docker push $(DOCKER_REGISTRY)$(PROJECT_NAME):$(VERSION)
 
 ## Help:
 help: ## Show this help.

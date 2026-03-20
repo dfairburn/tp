@@ -14,14 +14,18 @@ const (
 	editor = "EDITOR"
 )
 
-func Open(logger *logging.Logger, templateDir, template string) error {
+func Open(logger *logging.Logger, templateDir, template string, graphql bool) error {
 	path, err := tppaths.NewAbsoluteFromRelative(template, templateDir)
 	if err != nil {
 		return err
 	}
 
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		err = os.WriteFile(path, static.DefaultTemplate, 0644)
+		defaultTemplate := static.DefaultTemplate
+		if graphql {
+			defaultTemplate = static.DefaultGraphQLTemplate
+		}
+		err = os.WriteFile(path, defaultTemplate, 0644)
 		if err != nil {
 			return err
 		}

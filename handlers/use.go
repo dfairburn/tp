@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -24,40 +25,105 @@ import (
 
 type UsageError error
 
+// UseResult contains the result of executing a template
+type UseResult struct {
+	Method       string
+	URL          string
+	RequestBody  string
+	Headers      map[string]string
+	StatusCode   int
+	Status       string
+	ResponseBody string
+	ContentType  string
+	Duration     time.Duration
+	Error        error
+}
+
 type Template struct {
-	Descriptions map[string]string `yaml:"descriptions"`
-	Url          string            `yaml:"url"`
-	Method       string            `yaml:"method"`
-	Headers      map[string]string `yaml:"headers"`
-	Body         string            `yaml:"body"`
+	Descriptions map[string]string      `yaml:"descriptions"`
+	Url          string                 `yaml:"url"`
+	Method       string                 `yaml:"method"`
+	Headers      map[string]string      `yaml:"headers"`
+	Body         string                 `yaml:"body"`
+	Query        string                 `yaml:"query"`
+	Variables    map[string]interface{} `yaml:"variables"`
 }
 
 // Use gets a filepath and "uses" that template
 func Use(logger *logging.Logger, templateFile string, vars map[interface{}]interface{}, overrides config.Overrides, rawOutput bool) error {
+	result := Execute(logger, templateFile, vars, overrides)
+	if result.Error != nil {
+		return result.Error
+	}
+
+	respBody := []byte(result.ResponseBody)
+	if strings.Contains(result.ContentType, "application/json") && !rawOutput {
+		respBody = formatResponse(respBody)
+	}
+
+	_, err := io.WriteString(os.Stdout, string(respBody))
+	if err != nil {
+		logger.Println(err)
+		return err
+	}
+
+	return nil
+}
+
+// Execute runs the template and returns the result without printing
+func Execute(logger *logging.Logger, templateFile string, vars map[interface{}]interface{}, overrides config.Overrides) UseResult {
+	result := UseResult{}
+
 	_, err := os.Stat(templateFile)
 	if err != nil {
-		return err
+		result.Error = err
+		return result
 	}
-	overridden := Override(vars, overrides)
+
 	content, err := os.ReadFile(templateFile)
 	if err != nil {
-		return fmt.Errorf("reading template file: %w", err)
+		result.Error = fmt.Errorf("reading template file: %w", err)
+		return result
 	}
+
 	varUses, err := ParseUsages(content)
 	if err != nil {
-		return err
+		result.Error = err
+		return result
 	}
+
+	// Build the set of variable names this template actually needs
+	needed := make(map[string]bool, len(varUses))
+	for _, use := range varUses {
+		needed[use.Name()] = true
+	}
+
+	// Lazily expand only the env vars that this template references
+	expanded, err := config.ExpandVarsForKeys(logger, vars, needed)
+	if err != nil {
+		result.Error = err
+		return result
+	}
+
+	// Expand any $(command) patterns in override values
+	expandedOverrides, err := config.ExpandOverrides(logger, overrides)
+	if err != nil {
+		result.Error = err
+		return result
+	}
+
+	overridden := Override(expanded, expandedOverrides)
 
 	for _, use := range varUses {
 		_, hasValue := overridden[use.Name()]
 		switch use.(type) {
 		case VarUsage, TimestampUsage:
 			if !hasValue {
-				return UsageError(fmt.Errorf("missing required variable: %s", use.Name()))
+				result.Error = UsageError(fmt.Errorf("missing required variable: %s", use.Name()))
+				return result
 			}
 		case DefaultUsage, OptionalUsage:
 			// these tolerate missing values
-			// no error here
 		}
 	}
 
@@ -66,34 +132,72 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 		Funcs(templateFuncs(logger)).
 		ParseFiles(templateFile)
 	if err != nil {
-		return err
+		result.Error = err
+		return result
 	}
 
 	var buf bytes.Buffer
 	err = tmpl.ExecuteTemplate(&buf, templateName, overridden)
 	if err != nil {
-		return err
+		result.Error = err
+		return result
 	}
 
 	if buf.Len() < 1 {
-		return errors.New("unexpected 0 length from executing template")
+		result.Error = errors.New("unexpected 0 length from executing template")
+		return result
 	}
 
 	tmp := &Template{}
 	err = yaml.Unmarshal(buf.Bytes(), tmp)
 	if err != nil {
-		return err
+		result.Error = err
+		return result
+	}
+
+	// Auto-detect GraphQL templates by the presence of a query field
+	if tmp.Query != "" {
+		if tmp.Method == "" {
+			tmp.Method = "POST"
+		}
+		if tmp.Headers == nil {
+			tmp.Headers = map[string]string{}
+		}
+		if _, ok := tmp.Headers["Content-Type"]; !ok {
+			tmp.Headers["Content-Type"] = "application/json"
+		}
+
+		gqlBody := map[string]interface{}{
+			"query": tmp.Query,
+		}
+		if len(tmp.Variables) > 0 {
+			gqlBody["variables"] = tmp.Variables
+		}
+		bodyBytes, err := json.Marshal(gqlBody)
+		if err != nil {
+			result.Error = fmt.Errorf("marshalling graphql body: %w", err)
+			return result
+		}
+		tmp.Body = string(bodyBytes)
 	}
 
 	req, err := NewRequest(tmp)
 	if err != nil {
-		return err
+		result.Error = err
+		return result
 	}
 
 	r, err := req.toHttp()
 	if err != nil {
-		return err
+		result.Error = err
+		return result
 	}
+
+	// Populate result with request info
+	result.Method = r.Method
+	result.URL = r.URL.String()
+	result.RequestBody = req.Body
+	result.Headers = req.Headers
 
 	logger.Println("method:", r.Method)
 	logger.Println("url:", r.URL)
@@ -102,31 +206,30 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 
 	cli := http.Client{}
 
+	start := time.Now()
 	resp, err := cli.Do(r)
+	result.Duration = time.Since(start)
+
 	if err != nil {
-		return err
+		result.Error = err
+		return result
 	}
 
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logger.Println(err)
-		return err
+		result.Error = err
+		return result
 	}
 	logger.Println(resp)
 
-	ct := resp.Header.Get(http.CanonicalHeaderKey("Content-Type"))
-	if strings.Contains(ct, "application/json") && !rawOutput {
-		respBody = formatResponse(respBody)
-	}
+	result.StatusCode = resp.StatusCode
+	result.Status = resp.Status
+	result.ContentType = resp.Header.Get(http.CanonicalHeaderKey("Content-Type"))
+	result.ResponseBody = string(respBody)
 
-	_, err = io.WriteString(os.Stdout, string(respBody))
-	if err != nil {
-		logger.Println(err)
-		return err
-	}
-
-	return nil
+	return result
 }
 
 type Request struct {

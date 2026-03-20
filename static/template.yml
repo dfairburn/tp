@@ -1,4 +1,5 @@
 url:
 method:
 headers:
+  Authorization: Bearer {{ .token }}
 body: >

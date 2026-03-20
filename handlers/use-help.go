@@ -24,16 +24,16 @@ func ParseUsages(content []byte) ([]Usage, error) {
 		switch {
 		case varUsage.MatchString(useString):
 			match := varUsage.FindStringSubmatch(useString)
-			uses = append(uses, VarUsage{ref: match[1]})
+			uses = append(uses, VarUsage{Ref: match[1]})
 		case optionalUsage.MatchString(useString):
 			match := optionalUsage.FindStringSubmatch(useString)
-			uses = append(uses, OptionalUsage{ref: match[1]})
+			uses = append(uses, OptionalUsage{Ref: match[1]})
 		case timestampUsage.MatchString(useString):
 			match := timestampUsage.FindStringSubmatch(useString)
-			uses = append(uses, TimestampUsage{ref: match[1]})
+			uses = append(uses, TimestampUsage{Ref: match[1]})
 		case defaultUsage.MatchString(useString):
 			match := defaultUsage.FindStringSubmatch(useString)
-			uses = append(uses, DefaultUsage{ref: match[1], defaultVal: match[2]})
+			uses = append(uses, DefaultUsage{Ref: match[1], DefaultVal: match[2]})
 		}
 	}
 	return uses, nil
@@ -85,11 +85,11 @@ type Usage interface {
 }
 
 type VarUsage struct {
-	ref string
+	Ref string
 }
 
 func (v VarUsage) Name() string {
-	return v.ref
+	return v.Ref
 }
 
 func (v VarUsage) Extra() string {
@@ -97,34 +97,34 @@ func (v VarUsage) Extra() string {
 }
 
 type OptionalUsage struct {
-	ref string
+	Ref string
 }
 
 func (v OptionalUsage) Name() string {
-	return v.ref
+	return v.Ref
 }
 func (v OptionalUsage) Extra() string {
 	return "(optional)"
 }
 
 type DefaultUsage struct {
-	ref        string
-	defaultVal string
+	Ref        string
+	DefaultVal string
 }
 
 func (v DefaultUsage) Name() string {
-	return v.ref
+	return v.Ref
 }
 func (v DefaultUsage) Extra() string {
-	return fmt.Sprintf("(default: %s)", v.defaultVal)
+	return fmt.Sprintf("(default: %s)", v.DefaultVal)
 }
 
 type TimestampUsage struct {
-	ref string
+	Ref string
 }
 
 func (v TimestampUsage) Name() string {
-	return v.ref
+	return v.Ref
 }
 func (v TimestampUsage) Extra() string {
 	return "(timestamp)"

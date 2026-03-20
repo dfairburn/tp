@@ -32,7 +32,7 @@ var (
 
 	useCmd = &cobra.Command{
 		Use:   "use",
-		Short: "Uses a given template to send a curl request",
+		Short: "Uses a given template to send an HTTP request",
 		Long:  `Uses a given or chosen template, interpolates the variables and sends an http request`,
 		Args:  cobra.MinimumNArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -188,9 +188,40 @@ func init() {
 	useCmd.Flags().BoolVar(&rawOutput, "raw", false, rawUsage)
 
 	err := useCmd.RegisterFlagCompletionFunc(overrideFlagName, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		// If a template has been specified, filter completions to only
+		// variables referenced within that template.
+		if len(args) == 1 {
+			templatePath := args[0]
+			if !filepath.IsAbs(templatePath) {
+				absPath, err := paths.NewAbsoluteFromRelative(templatePath, c.TemplatesDirectoryPath)
+				if err == nil {
+					templatePath = absPath
+				}
+			}
+
+			content, err := os.ReadFile(templatePath)
+			if err == nil {
+				usages, err := handlers.ParseUsages(content)
+				if err == nil {
+					seen := make(map[string]bool, len(usages))
+					var vars []string
+					for _, use := range usages {
+						name := use.Name()
+						if !seen[name] {
+							seen[name] = true
+							vars = append(vars, name)
+						}
+					}
+					return vars, cobra.ShellCompDirectiveDefault
+				}
+			}
+		}
+
+		// Fallback: return all env vars when no template is specified
+		// or the template could not be read/parsed.
 		_, varMap := config.LoadEnvironment(logger, envFile, c.EnvironmentFile)
 		var vars []string
-		for key, _ := range varMap {
+		for key := range varMap {
 			s := key.(string)
 			vars = append(vars, s)
 		}

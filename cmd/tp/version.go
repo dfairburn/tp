@@ -2,27 +2,20 @@ package main
 
 import (
 	"fmt"
-	dbg "runtime/debug"
 	"strings"
 
 	"github.com/spf13/cobra"
+	buildinfo "runtime/debug"
 )
 
-// -ldflags sets this at build time, if not then falls back to module version from go install
-var version = "dev"
-
 func getVersion() string {
-	if version != "dev" {
-		return strings.TrimPrefix(version, "v")
-	}
-
-	if info, ok := dbg.ReadBuildInfo(); ok {
+	if info, ok := buildinfo.ReadBuildInfo(); ok {
 		if v := info.Main.Version; v != "" && v != "(devel)" {
 			return strings.TrimPrefix(v, "v")
 		}
 	}
 
-	return "dev"
+	return "devel"
 }
 
 func init() {

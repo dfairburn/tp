@@ -32,20 +32,33 @@ type Template struct {
 	Body         string            `yaml:"body"`
 }
 
-// Use gets a filepath and "uses" that template
-func Use(logger *logging.Logger, templateFile string, vars map[interface{}]interface{}, overrides config.Overrides, rawOutput bool) error {
+// Response holds the result of executing a template request
+type Response struct {
+	StatusCode  int
+	Status      string
+	Headers     http.Header
+	Body        []byte
+	ContentType string
+	Duration    time.Duration
+	Request     *Request
+}
+
+// ExecuteTemplate executes a template and returns the response without printing
+func ExecuteTemplate(logger *logging.Logger, templateFile string, vars map[interface{}]interface{}, overrides config.Overrides) (*Response, error) {
+	startTime := time.Now()
+
 	_, err := os.Stat(templateFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	overridden := Override(vars, overrides)
 	content, err := os.ReadFile(templateFile)
 	if err != nil {
-		return fmt.Errorf("reading template file: %w", err)
+		return nil, fmt.Errorf("reading template file: %w", err)
 	}
 	varUses, err := ParseUsages(content)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, use := range varUses {
@@ -53,7 +66,7 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 		switch use.(type) {
 		case VarUsage, TimestampUsage:
 			if !hasValue {
-				return UsageError(fmt.Errorf("missing required variable: %s", use.Name()))
+				return nil, UsageError(fmt.Errorf("missing required variable: %s", use.Name()))
 			}
 		case DefaultUsage, OptionalUsage:
 			// these tolerate missing values
@@ -66,33 +79,33 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 		Funcs(templateFuncs(logger)).
 		ParseFiles(templateFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var buf bytes.Buffer
 	err = tmpl.ExecuteTemplate(&buf, templateName, overridden)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if buf.Len() < 1 {
-		return errors.New("unexpected 0 length from executing template")
+		return nil, errors.New("unexpected 0 length from executing template")
 	}
 
 	tmp := &Template{}
 	err = yaml.Unmarshal(buf.Bytes(), tmp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req, err := NewRequest(tmp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	r, err := req.toHttp()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	logger.Println("method:", r.Method)
@@ -104,19 +117,37 @@ func Use(logger *logging.Logger, templateFile string, vars map[interface{}]inter
 
 	resp, err := cli.Do(r)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logger.Println(err)
-		return err
+		return nil, err
 	}
 	logger.Println(resp)
 
-	ct := resp.Header.Get(http.CanonicalHeaderKey("Content-Type"))
-	if strings.Contains(ct, "application/json") && !rawOutput {
+	return &Response{
+		StatusCode:  resp.StatusCode,
+		Status:      resp.Status,
+		Headers:     resp.Header,
+		Body:        respBody,
+		ContentType: resp.Header.Get(http.CanonicalHeaderKey("Content-Type")),
+		Duration:    time.Since(startTime),
+		Request:     req,
+	}, nil
+}
+
+// Use gets a filepath and "uses" that template
+func Use(logger *logging.Logger, templateFile string, vars map[interface{}]interface{}, overrides config.Overrides, rawOutput bool) error {
+	resp, err := ExecuteTemplate(logger, templateFile, vars, overrides)
+	if err != nil {
+		return err
+	}
+
+	respBody := resp.Body
+	if strings.Contains(resp.ContentType, "application/json") && !rawOutput {
 		respBody = formatResponse(respBody)
 	}
 

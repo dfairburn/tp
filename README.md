@@ -249,6 +249,59 @@ If your `$EDITOR` env var is not set, the default editor will be `vim`
 
 `tp list` prints the absolute path for all of your templates in your configured templates dir to STDOUT
 
+### tp tui
+
+`tp tui` launches an interactive terminal user interface for managing and executing HTTP request templates.
+
+**Features:**
+- Template browser with folder navigation
+- Request preview with headers, body, and parameters
+- Response viewer with JSON formatting
+- Variable override management
+
+**Example:**
+
+```shell
+tp tui
+```
+
+**Keyboard Shortcuts:**
+
+| Key | Action |
+|-----|--------|
+| `tab` / `shift+tab` | Switch between panels |
+| `1` / `2` / `3` | Jump to Templates / Request / Response panel |
+| `j` / `k` or arrows | Move up/down in lists |
+| `ctrl+d` / `pgdown` | Page down in template list |
+| `ctrl+u` / `pgup` | Page up in template list |
+| `g` / `G` | Jump to first/last item in template list |
+| `enter` | Select template / expand folder |
+| `space` | Toggle folder expansion |
+| `x` | Execute selected request |
+| `y` | Copy response body to clipboard |
+| `/` | Search templates |
+| `o` | Edit overrides file in `$EDITOR` |
+| `r` | Refresh template list |
+| `e` | Edit selected template in `$EDITOR` |
+| `n` | Create new template |
+| `h` | Show headers tab |
+| `b` | Show body tab |
+| `p` | Show params tab (request panel only) |
+| `q` / `ctrl+c` | Quit |
+| `esc` | Exit current mode |
+
+**Overrides:**
+
+Press `o` to open the overrides file (`~/.tp/overrides.yaml`) in your editor. This file lets you define variable overrides in YAML format:
+
+```yaml
+# Override variables for tp templates
+id: "12345"
+name: "test"
+```
+
+These values will override any matching variables in your templates. When you save and close the editor, overrides are automatically reloaded.
+
 ### tp completion
 
 `tp completion` prints the instructions to follow for installing shell completions. For completeness, I'll also state

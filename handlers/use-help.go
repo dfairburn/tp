@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -13,7 +14,7 @@ func ParseUsages(content []byte) ([]Usage, error) {
 	varUsage := regexp.MustCompile(`^\s*\.(\S+)\s*$`)
 	optionalUsage := regexp.MustCompile(`^\s*optional.*\.(\S+)\s*$`)
 	timestampUsage := regexp.MustCompile(`^\s*timestamp\s+\.(\S+)\s*$`)
-	defaultUsage := regexp.MustCompile(`^\s*default\s+\.(\S+)\s+"(\w+)"\s*$`)
+	defaultUsage := regexp.MustCompile(`^\s*default\s+"([^"]*)"\s+\.(\S+)\s*$`)
 
 	uses := []Usage{}
 	for _, match := range usageRegex.FindAllStringSubmatch(string(content), -1) {
@@ -33,7 +34,7 @@ func ParseUsages(content []byte) ([]Usage, error) {
 			uses = append(uses, TimestampUsage{ref: match[1]})
 		case defaultUsage.MatchString(useString):
 			match := defaultUsage.FindStringSubmatch(useString)
-			uses = append(uses, DefaultUsage{ref: match[1], defaultVal: match[2]})
+			uses = append(uses, DefaultUsage{ref: match[2], defaultVal: match[1]})
 		}
 	}
 	return uses, nil
@@ -70,10 +71,11 @@ func HandleUnquotedUrl(content []byte) ([]byte, error) {
 			return match
 		}
 
-		urlValue := string(submatch[1])
+		// single-quote so any double quotes in template actions (e.g. default "...") survive
+		urlValue := strings.ReplaceAll(string(submatch[1]), "'", "''")
 		indentation := string(match[:bytes.IndexByte(match, 'u')])
 
-		return []byte(fmt.Sprintf("%surl: \"%s\"", indentation, urlValue))
+		return []byte(fmt.Sprintf("%surl: '%s'", indentation, urlValue))
 	})
 
 	return modified, nil

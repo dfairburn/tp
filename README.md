@@ -91,11 +91,11 @@ tp use example
 This is all well and good, but the whole point of this is to template out these requests to make them easier to use, 
 configure and mutate on the fly. So let's add some variables.
 
-Execute the following command to open up the varaibles file in your default editor.
-On first run, this should open up an empty yaml file with the filepath `~/.tp/vars`.
+Execute the following command to open the configured environment variables file in your default editor.
+By default, this is `~/.tp/default.env.yml`.
 
 ```shell
-tp vars
+tp env
 ```
 
 
@@ -156,19 +156,30 @@ This gets evaluated by your shell (defined by the `$SHELL` env var) on the load 
 
 #### Notes on Variables
 
-The Variables file is defined in yaml, however the go `templating` package doesn't seem to like varaibles
+The variables file is defined in YAML. The Go `templating` package doesn't seem to like variables
 that have `-` in the name, `A-Za-z`, `0-9` and `_` are valid for variable names.
 
 ## Subcommands
 #### Global Flags
 
-| Short | Long     | Description                                                                             |
-|-------|----------|-----------------------------------------------------------------------------------------|
-|       | --config | An override for the location of the config file to use (defaults to: ~/.tp/config.yml)  |
-|       | --vars   | An override for the location of the variables file to use (defaults to: ~/.tp/vars.yml) |
-|       | --debug  | Redirects all logging to STDOUT                                                         |
-|       | --log    | An override for the destination of the logfile to be written to                         |
-| -h    | --help   | Displays the help text for the `use` command.                                           |
+| Short | Long          | Description                                                                                  |
+|-------|---------------|----------------------------------------------------------------------------------------------|
+| -c    | --config      | Config file path (defaults to `~/.tp/config.yml`).                                           |
+|       | --env-file    | Explicit environment file path; takes precedence over `--env` and `environmentFile`.         |
+| -e    | --env         | Environment name; loads `~/.tp/<name>.env.yml` and takes precedence over `environmentFile`.  |
+|       | --envFile     | Deprecated alias for `--env-file`.                                                           |
+| -d    | --debug       | Redirects all logging to STDOUT.                                                             |
+|       | --log         | Destination for the logfile.                                                                 |
+| -h    | --help        | Displays command help.                                                                       |
+
+If neither `--env-file` nor `--env` is given, `tp` uses the `environmentFile` in the config, or
+`~/.tp/default.env.yml` if no path is configured. Only that one file is loaded; variable files are not merged.
+
+Older environment files such as `~/.tp/dev.yml` are migrated to `~/.tp/dev.env.yml` when that
+environment is selected. The legacy default `~/.tp/default.yml` is also migrated during default
+environment resolution or `tp init`. If migration fails, the command reports a warning and fails
+rather than using the legacy path. If both files already exist, the canonical `.env.yml` file is
+used and the legacy file is left untouched.
 
 ### tp use
 `tp use` takes a given template, interpolates the variables defined in the configured variable file, takes
@@ -236,10 +247,10 @@ an already existing template.
 **Note**
 The default templates directory is `~/.tp/templates`, however you can define your own within the `~/.tp/config.yml` file.
 
-### tp vars
+### tp env
 
-`tp vars` opens the variable file defined in your tp config (default: `~/.tp/config.yml`) in your configured editor. The
-editor is chosen based on what your `$EDITOR` environment variable is set to
+`tp env` opens the environment variables file selected by the config or global environment flags in your configured editor.
+The editor is chosen based on what your `$EDITOR` environment variable is set to.
 
 **Note**
 
@@ -318,14 +329,17 @@ and source this file from your PowerShell profile.
 ### tp config
 
 `tp config` loads the config file defined at `~/.tp/config.yml`. This is where the default locations for
-your templates directory and variables file are stored. The default `~/.tp/config.yml` looks as follows:
+your templates directory and environment variables file are stored. The default `~/.tp/config.yml` looks as follows:
 
 ```yaml
 ---
 
-variableDefinitionFile: "~/.tp/vars.yml"
+environmentFile: "~/.tp/default.env.yml"
 templatesDirectoryPath: "~/.tp/templates"
 ```
+
+`environmentFile` is the supported config key for the variables file. The older `variableDefinitionFile` key is not
+recognized.
 
 ### Templates
 

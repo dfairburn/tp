@@ -95,8 +95,14 @@ var (
 				logger.Fatalf("too many arguments (%d) given to `use`, expected 1", len(args))
 			}
 
-			var vars map[interface{}]interface{}
-			_, vars = config.LoadEnvironment(logger, envFile, c.EnvironmentFile)
+			environmentPath, err := config.ResolveEnvironmentFile(logger, c.EnvironmentFile, env, envFile)
+			if err != nil {
+				return err
+			}
+			_, vars, err := config.LoadEnvironment(logger, environmentPath)
+			if err != nil {
+				return err
+			}
 
 			o, err := config.ValidateOverrides(overrides, logger)
 			if err != nil {
@@ -188,7 +194,16 @@ func init() {
 	useCmd.Flags().BoolVar(&rawOutput, "raw", false, rawUsage)
 
 	err := useCmd.RegisterFlagCompletionFunc(overrideFlagName, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		_, varMap := config.LoadEnvironment(logger, envFile, c.EnvironmentFile)
+		environmentPath, err := config.ResolveEnvironmentFile(logger, c.EnvironmentFile, env, envFile)
+		if err != nil {
+			logger.WithError(err).Warn("could not resolve environment file for completions")
+			return nil, cobra.ShellCompDirectiveError
+		}
+		_, varMap, err := config.LoadEnvironment(logger, environmentPath)
+		if err != nil {
+			logger.WithError(err).Warn("could not load environment variables for completions")
+			return nil, cobra.ShellCompDirectiveError
+		}
 		var vars []string
 		for key, _ := range varMap {
 			s := key.(string)
@@ -205,7 +220,6 @@ func init() {
 		// cobra doesn't run these on help runs :(
 		initLogger()
 		initConfig()
-		initEnv()
 
 		printTemplateHelp(cmd, args)
 	})

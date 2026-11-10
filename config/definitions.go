@@ -32,6 +32,10 @@ var (
 	DefaultEnv                = "default"
 )
 
+func DefaultEnvironmentFilePath() string {
+	return paths.Expand(HomeLoc + DefaultEnvFilename + YmlExt)
+}
+
 type pathRepo struct {
 	paths []string
 }
@@ -56,27 +60,6 @@ func buildConfigPaths() pathRepo {
 
 	p.add(HereLoc, ConfigFilename, YamlExt)
 	p.add(HereLoc, ConfigFilename, YmlExt)
-
-	return p
-}
-
-func buildEnvPaths() pathRepo {
-	p := pathRepo{}
-
-	p.add(HomeLoc, DefaultEnvFilename, YamlExt)
-	p.add(HomeLoc, DefaultEnvFilename, YmlExt)
-
-	p.add(HomeLoc, YamlExt)
-	p.add(HomeLoc, YmlExt)
-
-	p.add(RelLoc, DefaultEnvFilename, YamlExt)
-	p.add(RelLoc, DefaultEnvFilename, YmlExt)
-
-	p.add(RelLoc, DefaultEnvFilename, YamlExt)
-	p.add(RelLoc, DefaultEnvFilename, YmlExt)
-
-	p.add(HereLoc, DefaultEnvFilename, YamlExt)
-	p.add(HereLoc, DefaultEnvFilename, YmlExt)
 
 	return p
 }

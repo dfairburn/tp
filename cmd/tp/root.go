@@ -41,18 +41,14 @@ func Execute() error {
 }
 
 func init() {
-	cobra.OnInitialize(initLogger, initConfig, initEnv)
+	cobra.OnInitialize(initLogger, initConfig)
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", config.DefaultConfigFile, "yaml file containing config")
-	rootCmd.PersistentFlags().StringVar(&envFile, "envFile", config.DefaultEnvPath, "yaml file containing variable definitions")
-	rootCmd.PersistentFlags().StringVarP(&env, "env", "e", config.DefaultEnv, "a string dictating which env file to use")
+	rootCmd.PersistentFlags().StringVar(&envFile, "env-file", "", "path to the environment variables file")
+	rootCmd.PersistentFlags().StringVar(&envFile, "envFile", "", "path to the environment variables file")
+	_ = rootCmd.PersistentFlags().MarkDeprecated("envFile", "use --env-file instead")
+	rootCmd.PersistentFlags().StringVarP(&env, "env", "e", "", "environment name (uses ~/.tp/<name>.env.yml)")
 	rootCmd.PersistentFlags().StringVar(&logFile, "log", config.DefaultLogFile, "destination of log file")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "whether to print debug to stdout")
-}
-
-func initEnv() {
-	if env != "" {
-		envFile = paths.Expand(config.HomeLoc + env + config.YmlExt)
-	}
 }
 
 func initConfig() {

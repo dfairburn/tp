@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/dfairburn/tp/config"
 	"github.com/dfairburn/tp/handlers"
 	"github.com/spf13/cobra"
 )
@@ -13,11 +14,17 @@ var (
 		Long:  "env opens the configured environment file for editing in the default editor (determined by $EDITOR, defaulting to vim)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			explicitPath := envFile
 			if len(args) == 1 {
-				return handlers.Env(logger, c, args[0])
-			} else {
-				return handlers.Env(logger, c, envFile)
+				explicitPath = args[0]
 			}
+
+			path, err := config.ResolveEnvironmentFile(logger, c.EnvironmentFile, env, explicitPath)
+			if err != nil {
+				return err
+			}
+
+			return handlers.Env(logger, path)
 		},
 	}
 )

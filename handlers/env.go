@@ -1,32 +1,28 @@
 package handlers
 
 import (
-	"errors"
 	"fmt"
-	"github.com/dfairburn/tp/config"
-	logging "github.com/sirupsen/logrus"
 	"os"
+	"path/filepath"
+
+	logging "github.com/sirupsen/logrus"
 )
 
-func Env(logger *logging.Logger, c config.Config, envFile string) error {
-	//varsFile, _ := config.LoadEnvironment(logger, varsFile, c.VariableDefinitionFile)
-	// We should check if there are any .yaml/.yml files within the known file locations
-	// If there isn't, we should create one in the default location of: ~/.tp/vars.yml
-	path := c.EnvironmentFile
-	if envFile != "" {
-		path = envFile
-	}
-
+func Env(logger *logging.Logger, path string) error {
 	ed := os.Getenv(editor)
 	if ed == "" {
 		ed = "vim"
 	}
 
-	if _, exists := os.Stat(path); errors.Is(exists, os.ErrNotExist) {
-		err := os.WriteFile(path, []byte("---"), 0644)
-		if err != nil {
-			return fmt.Errorf("error creating variable file (%s): %v", path, err)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("creating environment file directory: %w", err)
+	}
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err := os.WriteFile(path, []byte("---\n"), 0644); err != nil {
+			return fmt.Errorf("error creating variable file (%s): %w", path, err)
 		}
+	} else if err != nil {
+		return fmt.Errorf("checking environment file (%s): %w", path, err)
 	}
 
 	return runEditor(ed, path)

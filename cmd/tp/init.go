@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/dfairburn/tp/config"
 	"github.com/dfairburn/tp/static"
@@ -48,14 +49,19 @@ var (
 				WithField("path", config.DefaultTemplatesDirectory).
 				Info("initialized default templates directory")
 
-			if _, err := os.Stat(config.DefaultEnvPath); err != nil && os.IsNotExist(err) {
-				f, err := os.Create(config.DefaultEnvPath)
-				defer f.Close()
-				if err != nil {
+			environmentPath, err := config.ResolveEnvironmentFile(logger, config.DefaultEnvironmentFilePath(), "", "")
+			if err != nil {
+				return err
+			}
+			if err := os.MkdirAll(filepath.Dir(environmentPath), os.ModePerm); err != nil {
+				return err
+			}
+			if _, err := os.Stat(environmentPath); os.IsNotExist(err) {
+				if err := os.WriteFile(environmentPath, []byte("---\n"), os.ModePerm); err != nil {
 					return err
 				}
 				logger.
-					WithField("path", config.DefaultEnvPath).
+					WithField("path", environmentPath).
 					Info("initialized default variables file")
 			} else if err != nil {
 				return err
